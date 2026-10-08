@@ -209,7 +209,7 @@ local autoPickupCategories = {
     Melee = true,
     Medical = true,
     Armor = true,
-    Food = true,
+    Food = false,
     Resource = true,
     Fuel = true,
     Ability = true,
@@ -1696,7 +1696,7 @@ local function startAutoPickup()
                 if autoPickupAttempts[item] and (now - autoPickupAttempts[item]) < 0.35 then continue end
                 autoPickupAttempts[item] = now
 
-                if itemCat == "Fuel" or itemCat == "Resource" then
+                if itemCat == "Fuel" or itemCat == "Resource" or itemCat == "Food" then
                     pcall(function()
                         local Event = game:GetService("ReplicatedStorage").Remotes.Tools.AdjustBackpack
                         if Event then
@@ -1872,7 +1872,7 @@ do
 local espSettingsGroup = Tabs.Visuals:AddLeftGroupbox("ESP Settings", "settings")
 
 espSettingsGroup:AddSlider("ESPMaxDistance", {
-    Text = "Max Distance", Default = 170, Min = 50, Max = 2000, Rounding = 0, Suffix = " studs",
+    Text = "Max Distance", Default = 250, Min = 50, Max = 2000, Rounding = 0, Suffix = " studs",
     Tooltip = "Maximum render distance shared by all ESP systems.",
     Callback = function()
         refreshMobESP(); refreshPlayerESP(); refreshStructureESP()
