@@ -48,14 +48,8 @@ local connections = {}
 local mobESPInstances = {}
 local playerESPInstances = {}
 local structureESPInstances = {}
-local flyBV, flyBG = nil, nil
-local flyActive = false
 local antiAFKConn = nil
-local autoSprintActive = false
 local killAuraConn = nil
-local aimbotConn = nil
-local aimbotTarget = nil
-local fovCircle = nil
 local killAuraIndicatorLine = nil
 local killAuraIndicatorCircle = nil
 local repairAuraConn = nil
@@ -70,10 +64,6 @@ local originalFog = { stored = false }
 local mobOptions = { ESP = false, Chams = false, Name = false, Distance = false }
 local playerESPVars = { ESP = false, Chams = false, Name = false, Distance = false, Health = false }
 local structureESPVars = { ESP = false, Chams = false, Name = false, Distance = false }
-local bhopActive = false
-local bhopConn = nil
-local remoteSpyEnabled = false
-local remoteSpyLogs = {}
 
 local mobNames = {"Runner", "Crawler", "Riot", "Zombie", "Brute", "Spitter", "Boss"}
 
@@ -213,31 +203,6 @@ for catName, catItems in pairs(extraItemCategories) do
     end
 end
 table.sort(itemNames)
-
-local pickupItemSet = {
-    ["Ammo Box"]=true,["Long Ammo"]=true,["Medium Ammo"]=true,["Shells"]=true,["Pistol Ammo"]=true,
-    ["Power Armor"]=true,["Light Armor"]=true,["Medium Armor"]=true,["Heavy Armor"]=true,
-    ["Emerald"]=true,["Gas Mask"]=true,
-    ["Ammo Crate"]=true,["Barbed Wire"]=true,["Bear Trap"]=true,["Boost Pad"]=true,
-    ["Electric Fence"]=true,["Farm Plot"]=true,["Fence"]=true,["Floodlight"]=true,
-    ["Gate"]=true,["Landmine"]=true,["Map"]=true,["Repair Drone"]=true,["Shelf"]=true,
-    ["Teleporter"]=true,["Time Machine"]=true,["Turret"]=true,["Wall"]=true,["Watchtower"]=true,
-    ["Basic Backpack"]=true,["Good Backpack"]=true,["Great Backpack"]=true,
-    ["Grenade"]=true,["Molotov"]=true,
-    ["AA-12"]=true,["AK-47"]=true,["Assault Rifle"]=true,["Desert Eagle"]=true,
-    ["Double Barrel"]=true,["Flamethrower"]=true,["Grenade Launcher"]=true,["LMG"]=true,
-    ["MediGun"]=true,["Pistol"]=true,["Ray Gun"]=true,["Revolver"]=true,["Rifle"]=true,
-    ["Shotgun"]=true,["Sniper"]=true,["SVD"]=true,["Uzi"]=true,
-    ["Bandage"]=true,["Compound H"]=true,["Compound I"]=true,["Compound R"]=true,
-    ["Compound S"]=true,["Medkit"]=true,
-    ["Bat"]=true,["Chainsaw"]=true,["Crowbar"]=true,["Fire Axe"]=true,["Hatchet"]=true,
-    ["Katana"]=true,["Knife"]=true,["Riot Shield"]=true,["Scythe"]=true,
-    ["Sledgehammer"]=true,["Spear"]=true,["Spiked Bat"]=true,
-    ["Blueprint"]=true,["Military Keycard"]=true,["Repair Hammer"]=true,["Suppressor"]=true,
-}
-local pickupItemNames = {}
-for k in pairs(pickupItemSet) do table.insert(pickupItemNames, k) end
-table.sort(pickupItemNames)
 
 local structureNames = {
     "Ammo Crate", "Barbed Wire", "Bear Trap", "Boost Pad", "Electric Fence",
@@ -1090,77 +1055,6 @@ local noclipConn = RunService.Heartbeat:Connect(function()
 end)
 table.insert(connections, noclipConn)
 
-local stopFly
-
-local function startFly()
-    stopFly()
-    local char = LocalPlayer.Character
-    if not char then return end
-    local rootPart = char:FindFirstChild("HumanoidRootPart")
-    if not rootPart then return end
-    local humanoid = char:FindFirstChildOfClass("Humanoid")
-    if not humanoid then return end
-
-    humanoid.PlatformStand = true
-
-    flyBV = Instance.new("BodyVelocity")
-    flyBV.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-    flyBV.Velocity = Vector3.new(0, 0, 0)
-    flyBV.Parent = rootPart
-
-    flyBG = Instance.new("BodyGyro")
-    flyBG.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-    flyBG.P = 9000
-    flyBG.CFrame = Workspace.CurrentCamera.CFrame
-    flyBG.Parent = rootPart
-
-    flyActive = true
-end
-
-stopFly = function()
-    flyActive = false
-    if flyBV then flyBV:Destroy() flyBV = nil end
-    if flyBG then flyBG:Destroy() flyBG = nil end
-
-    local char = LocalPlayer.Character
-    if char then
-        local humanoid = char:FindFirstChildOfClass("Humanoid")
-        if humanoid then
-            humanoid.PlatformStand = false
-        end
-    end
-end
-
-local flyMoveConn = RunService.RenderStepped:Connect(function()
-    if not Toggles.Fly then return end
-    if not Toggles.Fly.Value or not flyActive then return end
-
-    local char = LocalPlayer.Character
-    if not char or not char.Parent then
-        stopFly()
-        return
-    end
-    local rootPart = char:FindFirstChild("HumanoidRootPart")
-    if not rootPart then return end
-
-    local cam = Workspace.CurrentCamera
-    local speed = Options.FlySpeed.Value
-    local dir = Vector3.new(0, 0, 0)
-
-    if UserInputService:IsKeyDown(Enum.KeyCode.W) then dir = dir + cam.CFrame.LookVector end
-    if UserInputService:IsKeyDown(Enum.KeyCode.S) then dir = dir - cam.CFrame.LookVector end
-    if UserInputService:IsKeyDown(Enum.KeyCode.A) then dir = dir - cam.CFrame.RightVector end
-    if UserInputService:IsKeyDown(Enum.KeyCode.D) then dir = dir + cam.CFrame.RightVector end
-    if UserInputService:IsKeyDown(Enum.KeyCode.Space) then dir = dir + Vector3.new(0, 1, 0) end
-    if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then dir = dir - Vector3.new(0, 1, 0) end
-
-    if dir.Magnitude > 0 then dir = dir.Unit end
-
-    if flyBV then flyBV.Velocity = dir * speed end
-    if flyBG then flyBG.CFrame = cam.CFrame end
-end)
-table.insert(connections, flyMoveConn)
-
 local function enableFullbright()
     if not originalLighting.stored then
         originalLighting.Brightness = Lighting.Brightness
@@ -1188,26 +1082,10 @@ local function disableFullbright()
         Lighting.Ambient = originalLighting.Ambient
         Lighting.OutdoorAmbient = originalLighting.OutdoorAmbient
         Lighting.ClockTime = originalLighting.ClockTime
-        Lighting.FogEnd = originalLighting.FogEnd
-        Lighting.FogStart = originalLighting.FogStart
+        Lighting.FogEnd = originalFog.FogEnd
+        Lighting.FogStart = originalFog.FogStart
         Lighting.GlobalShadows = originalLighting.GlobalShadows
     end
-end
-
-local function startAutoSprint()
-    if autoSprintActive then return end
-    autoSprintActive = true
-    pcall(function()
-        game:GetService("VirtualInputManager"):SendKeyEvent(true, Enum.KeyCode.LeftShift, false, game)
-    end)
-end
-
-local function stopAutoSprint()
-    if not autoSprintActive then return end
-    autoSprintActive = false
-    pcall(function()
-        game:GetService("VirtualInputManager"):SendKeyEvent(false, Enum.KeyCode.LeftShift, false, game)
-    end)
 end
 
 local stopAntiAFK
@@ -1495,170 +1373,6 @@ local function startKillAura()
     end)
 end
 
-local function stopAimbot()
-    if aimbotConn then
-        aimbotConn:Disconnect()
-        aimbotConn = nil
-    end
-    aimbotTarget = nil
-    if fovCircle then fovCircle.Visible = false end
-end
-
-local function getAimbotTarget()
-    local char = LocalPlayer.Character
-    if not char then return nil end
-    local myRoot = char:FindFirstChild("HumanoidRootPart")
-    if not myRoot then return nil end
-
-    local camera = Workspace.CurrentCamera
-    if not camera then return nil end
-
-    local viewportSize = camera.ViewportSize
-    local screenCenter = Vector2.new(viewportSize.X / 2, viewportSize.Y / 2)
-
-    local fov = Options.AimbotFOV and Options.AimbotFOV.Value or 100
-    local maxRange = Options.AimbotRange and Options.AimbotRange.Value or 500
-    local targetMode = Options.AimbotTarget and Options.AimbotTarget.Value or "Mobs"
-    local aimPart = Options.AimbotPart and Options.AimbotPart.Value or "Head"
-
-    local bestTarget = nil
-    local bestScore = math.huge
-
-    local function isValidTarget(targetChar, targetRoot)
-        if not targetChar or not targetRoot then return false end
-        if targetChar == char then return false end
-
-        local dist = (targetRoot.Position - myRoot.Position).Magnitude
-        if dist > maxRange then return false end
-
-        local humanoid = targetChar:FindFirstChildOfClass("Humanoid")
-        if humanoid and humanoid.Health <= 0 then return false end
-
-        local screenPos, onScreen = camera:WorldToViewportPoint(targetRoot.Position)
-        if not onScreen then return false end
-
-        local fovDist = (Vector2.new(screenPos.X, screenPos.Y) - screenCenter).Magnitude
-        if fovDist > fov then return false end
-
-        return true, dist, fovDist, screenPos
-    end
-
-    if targetMode == "Mobs" or targetMode == "Both" then
-        if charactersFolder then
-            for _, mob in ipairs(charactersFolder:GetChildren()) do
-                if table.find(mobNames, mob.Name) then
-                    local mobRoot = mob:FindFirstChild("HumanoidRootPart") or mob:FindFirstChild("Torso") or mob:FindFirstChild("UpperTorso")
-                    local valid, dist, fovDist = isValidTarget(mob, mobRoot)
-                    if valid then
-                        local score = Options.AimbotPriority and Options.AimbotPriority.Value == "FOV" and fovDist or dist
-                        if score < bestScore then
-                            bestScore = score
-                            bestTarget = {character = mob, rootPart = mobRoot}
-                        end
-                    end
-                end
-            end
-        end
-    end
-
-    if targetMode == "Players" or targetMode == "Both" then
-        for _, player in ipairs(Players:GetPlayers()) do
-            if player ~= LocalPlayer then
-                local pChar = player.Character
-                if pChar then
-                    local pRoot = pChar:FindFirstChild("HumanoidRootPart")
-                    local valid, dist, fovDist = isValidTarget(pChar, pRoot)
-                    if valid then
-                        local score = Options.AimbotPriority and Options.AimbotPriority.Value == "FOV" and fovDist or dist
-                        if score < bestScore then
-                            bestScore = score
-                            bestTarget = {character = pChar, rootPart = pRoot}
-                        end
-                    end
-                end
-            end
-        end
-    end
-
-    return bestTarget
-end
-
-local function startAimbot()
-    stopAimbot()
-    aimbotConn = RunService.RenderStepped:Connect(function()
-        if not Toggles.Aimbot or not Toggles.Aimbot.Value then
-            if fovCircle then fovCircle.Visible = false end
-            return
-        end
-
-        local char = LocalPlayer.Character
-        if not char then return end
-
-        local camera = Workspace.CurrentCamera
-        if not camera then return end
-
-        local target = getAimbotTarget()
-        aimbotTarget = target
-
-        if not fovCircle then
-            fovCircle = Drawing.new("Circle")
-            fovCircle.Filled = false
-            fovCircle.NumSides = 64
-            fovCircle.Thickness = 1.5
-            fovCircle.Transparency = 1
-        end
-        if Toggles.AimbotFOVCircle and Toggles.AimbotFOVCircle.Value then
-            local vp = camera.ViewportSize
-            fovCircle.Position = Vector2.new(vp.X / 2, vp.Y / 2)
-            fovCircle.Radius = Options.AimbotFOV and Options.AimbotFOV.Value or 100
-            fovCircle.Color = Color3.fromRGB(255, 255, 255)
-            fovCircle.Visible = true
-        else
-            fovCircle.Visible = false
-        end
-
-        if not target then return end
-
-        local aimPartName = Options.AimbotPart and Options.AimbotPart.Value or "Head"
-        local targetPart = target.character:FindFirstChild(aimPartName)
-
-        if not targetPart or not targetPart:IsA("BasePart") then
-            targetPart = target.rootPart
-        end
-
-        if not targetPart then return end
-
-        local targetPos = targetPart.Position
-        if Toggles.AimbotPrediction and Toggles.AimbotPrediction.Value then
-            local velocity = targetPart.AssemblyLinearVelocity
-            local predictionAmount = Options.AimbotPredictionAmount and Options.AimbotPredictionAmount.Value or 0.1
-            targetPos = targetPos + (velocity * predictionAmount)
-        end
-
-        local myRoot = char:FindFirstChild("HumanoidRootPart")
-        if not myRoot then return end
-
-        local myHead = char:FindFirstChild("Head")
-        if not myHead then return end
-
-        local aimPos = targetPos
-        if aimPartName == "Head" then
-            aimPos = targetPos + Vector3.new(0, 0.5, 0)
-        end
-
-        local smoothness = Options.AimbotSmoothness and Options.AimbotSmoothness.Value or 0.5
-        local smoothFactor = 1 - (smoothness * 0.95)
-
-        local targetCFrame = CFrame.lookAt(myHead.Position, aimPos)
-
-        if smoothness > 0 then
-            targetCFrame = camera.CFrame:Lerp(targetCFrame, smoothFactor)
-        end
-
-        camera.CFrame = targetCFrame
-    end)
-end
-
 local fogOriginalStates = {}
 local fogObjects = {}
 local fogFEConns = {}
@@ -1807,9 +1521,9 @@ local function enableRemoveFog()
             end
         end))
 
-        Library:Notify({ Title = "Remove Fog", Description = "Enabled â€“ " .. #fogObjects .. " fog objects hidden", Time = 2 })
+        Library:Notify({ Title = "Remove Fog", Description = "Enabled - " .. #fogObjects .. " fog objects hidden", Time = 2 })
     else
-        Library:Notify({ Title = "Remove Fog", Description = "Enabled â€“ Lighting fog cleared (no Fog folder found)", Time = 2 })
+        Library:Notify({ Title = "Remove Fog", Description = "Enabled - Lighting fog cleared (no Fog folder found)", Time = 2 })
     end
 end
 
@@ -1839,186 +1553,7 @@ local function disableRemoveFog()
     fogOriginalStates = {}
     fogObjects = {}
 
-    Library:Notify({ Title = "Remove Fog", Description = "Disabled â€“ fog restored", Time = 2 })
-end
-
-local function stopBhop()
-    if bhopConn then
-        bhopConn:Disconnect()
-        bhopConn = nil
-    end
-    bhopActive = false
-end
-
-local function startBhop()
-    stopBhop()
-    bhopActive = true
-    
-    bhopConn = RunService.RenderStepped:Connect(function()
-        if not Toggles.BunnyHop or not Toggles.BunnyHop.Value then return end
-        
-        local char = LocalPlayer.Character
-        if not char then return end
-        
-        local humanoid = char:FindFirstChildOfClass("Humanoid")
-        local root = char:FindFirstChild("HumanoidRootPart")
-        
-        if not humanoid or not root then return end
-        
-        local moveDir = humanoid.MoveDirection
-        if moveDir.Magnitude > 0.1 then
-            local state = humanoid:GetState()
-            if state == Enum.HumanoidStateType.Running or state == Enum.HumanoidStateType.RunningNoPhysics then
-                humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-            end
-        end
-    end)
-end
-
-local funnyDanceTrack = nil
-local funnyDanceConn = nil
-
-local DANCE_ANIM_IDS = {
-    507770723,
-    507772104,
-    507771281,
-}
-
-local function stopFunnyDance()
-    if funnyDanceConn then
-        funnyDanceConn:Disconnect()
-        funnyDanceConn = nil
-    end
-    if funnyDanceTrack then
-        if funnyDanceTrack ~= "PHYS" then
-            pcall(function() funnyDanceTrack:Stop(0.3) end)
-        end
-        funnyDanceTrack = nil
-    end
-end
-
-local function startFunnyDance()
-    stopFunnyDance()
-
-    local selectedIdx = Options.DanceStyle and Options.DanceStyle.Value or 1
-    local selectedId = DANCE_ANIM_IDS[selectedIdx] or DANCE_ANIM_IDS[1]
-
-    local physDanceConn = nil
-
-    local function stopPhysDance()
-        if physDanceConn then
-            physDanceConn:Disconnect()
-            physDanceConn = nil
-        end
-    end
-
-    local function startPhysDance(char)
-        stopPhysDance()
-        local t = 0
-        local spinDir = (selectedIdx % 2 == 0) and 1 or -1
-        physDanceConn = RunService.Heartbeat:Connect(function(dt)
-            if not Toggles.FunnyDance or not Toggles.FunnyDance.Value then
-                stopPhysDance()
-                return
-            end
-            local c = char or LocalPlayer.Character
-            if not c then return end
-            local root = c:FindFirstChild("HumanoidRootPart")
-            if not root then return end
-            local hum = c:FindFirstChildOfClass("Humanoid")
-            if not hum or hum.Health <= 0 then return end
-            t = t + dt
-            local spin = CFrame.Angles(0, spinDir * dt * (2.5 + selectedIdx * 0.4), 0)
-            local bob = Vector3.new(0, math.sin(t * 4) * 0.08, 0)
-            root.CFrame = CFrame.new(root.Position + bob) * (root.CFrame - root.CFrame.Position) * spin
-        end)
-        funnyDanceTrack = "PHYS"
-    end
-
-    local function applyDance(char)
-        char = char or LocalPlayer.Character
-        if not char then return end
-        local humanoid = char:FindFirstChildOfClass("Humanoid")
-        if not humanoid then return end
-        local animator = humanoid:FindFirstChildOfClass("Animator")
-        if not animator then
-            animator = Instance.new("Animator")
-            animator.Parent = humanoid
-        end
-        if funnyDanceTrack then
-            if funnyDanceTrack == "PHYS" then
-                stopPhysDance()
-            else
-                pcall(function() funnyDanceTrack:Stop(0) end)
-            end
-            funnyDanceTrack = nil
-        end
-
-        local function findNativeAnim()
-            local animateScript = char:FindFirstChild("Animate")
-            if not animateScript then return nil end
-            local danceVariants = {
-                { "dance", "dance2", "dance3" },
-                { "Dance", "Dance2", "Dance3" },
-                { "emote", "emote2", "emote3" },
-                { "Emote", "Emote2", "Emote3" },
-            }
-            for _, variants in ipairs(danceVariants) do
-                local folderName = variants[selectedIdx] or variants[1]
-                local folder = animateScript:FindFirstChild(folderName)
-                if folder then
-                    local anim = folder:FindFirstChildOfClass("Animation")
-                    if anim then return anim end
-                end
-            end
-            for _, desc in ipairs(animateScript:GetDescendants()) do
-                if desc:IsA("Animation") then return desc end
-            end
-            return nil
-        end
-
-        local nativeAnim = findNativeAnim()
-        if nativeAnim then
-            local ok, track = pcall(function() return animator:LoadAnimation(nativeAnim) end)
-            if ok and track then
-                track.Priority = Enum.AnimationPriority.Action4
-                track.Looped = true
-                track:Play(0.15)
-                funnyDanceTrack = track
-                return
-            end
-        end
-
-        local ok2, results = pcall(function()
-            return game:GetObjects("rbxassetid://" .. tostring(selectedId))
-        end)
-        if ok2 and results and results[1] and results[1]:IsA("Animation") then
-            local ok3, track = pcall(function() return animator:LoadAnimation(results[1]) end)
-            if ok3 and track then
-                track.Priority = Enum.AnimationPriority.Action4
-                track.Looped = true
-                track:Play(0.15)
-                funnyDanceTrack = track
-                return
-            end
-        end
-
-        Library:Notify({ Title = "Funny Dance", Description = "Animation blocked by game â€“ using physics dance instead.", Time = 3 })
-        startPhysDance(char)
-    end
-
-    applyDance()
-
-    funnyDanceConn = LocalPlayer.CharacterAdded:Connect(function(newChar)
-        task.delay(0.5, function()
-            if Toggles.FunnyDance and Toggles.FunnyDance.Value then
-                selectedIdx = Options.DanceStyle and Options.DanceStyle.Value or 1
-                selectedId = DANCE_ANIM_IDS[selectedIdx] or DANCE_ANIM_IDS[1]
-                if physDanceConn then stopPhysDance() end
-                applyDance(newChar)
-            end
-        end)
-    end)
+    Library:Notify({ Title = "Remove Fog", Description = "Disabled - fog restored", Time = 2 })
 end
 
 local function serverHop()
@@ -2075,7 +1610,7 @@ local function rejoinServer()
 
     if not jobId or jobId == "" then
         pcall(function() TeleportService:Teleport(placeId, LocalPlayer) end)
-        Library:Notify({ Title = "Rejoin", Description = "No JobId â€“ rejoining via matchmaking...", Time = 3 })
+        Library:Notify({ Title = "Rejoin", Description = "No JobId - rejoining via matchmaking...", Time = 3 })
         return
     end
 
@@ -2096,153 +1631,7 @@ local function rejoinServer()
     warn("[Rejoin] TeleportToPlaceInstance failed: " .. tostring(err2))
 
     pcall(function() TeleportService:Teleport(placeId, LocalPlayer) end)
-    Library:Notify({ Title = "Rejoin", Description = "Server unavailable â€“ rejoining via matchmaking...", Time = 3 })
-end
-
-local remoteSpyConnections = {}
-local oldFireServer = nil
-local oldInvokeServer = nil
-
-local function stopRemoteSpy()
-    remoteSpyEnabled = false
-    
-    oldFireServer = nil
-    oldInvokeServer = nil
-    
-    for _, conn in ipairs(remoteSpyConnections) do
-        if conn then pcall(function() conn:Disconnect() end) end
-    end
-    remoteSpyConnections = {}
-    
-    Library:Notify({ Title = "Remote Spy", Description = "Disabled", Time = 2 })
-end
-
-local function startRemoteSpy()
-    stopRemoteSpy()
-    remoteSpyEnabled = true
-    remoteSpyLogs = {}
-    
-    Library:Notify({ Title = "Remote Spy", Description = "Enabled - Check console for remote calls", Time = 3 })
-    
-    local function logRemoteCall(remote, method, args)
-        if not remoteSpyEnabled then return end
-        
-        local success, name = pcall(function() return remote.Name end)
-        local success2, path = pcall(function() return remote:GetFullName() end)
-        local success3, className = pcall(function() return remote.ClassName end)
-        
-        local logEntry = {
-            Type = success3 and className or "Unknown",
-            Method = method,
-            Name = success and name or "Unknown",
-            Path = success2 and path or "Unknown",
-            Args = args,
-            Time = os.date("%H:%M:%S")
-        }
-        table.insert(remoteSpyLogs, logEntry)
-        if #remoteSpyLogs > 100 then table.remove(remoteSpyLogs, 1) end
-        
-        local argCount = args and #args or 0
-        print(string.format("[RemoteSpy] %s.%s(%s) - %s", 
-            success and name or "Unknown", method, 
-            argCount > 0 and tostring(argCount) .. " args" or "no args",
-            os.date("%H:%M:%S")))
-    end
-    
-    if hookmetamethod then
-        local success, err = pcall(function()
-            local originalNamecall
-            originalNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
-                local method = getnamecallmethod()
-                if remoteSpyEnabled and (method == "FireServer" or method == "InvokeServer") then
-                    logRemoteCall(self, method, {...})
-                end
-                return originalNamecall(self, ...)
-            end))
-            oldFireServer = originalNamecall
-        end)
-        if success then
-            Library:Notify({ Title = "Remote Spy", Description = "Hooked via hookmetamethod (Potassium)", Time = 2 })
-            return
-        else
-            warn("[RemoteSpy] hookmetamethod failed: " .. tostring(err))
-        end
-    end
-
-    if hookfunction then
-        local success, err = pcall(function()
-            local tempRemote = Instance.new("RemoteEvent")
-            local tempFunc = Instance.new("RemoteFunction")
-
-            oldFireServer = hookfunction(tempRemote.FireServer, function(self, ...)
-                if remoteSpyEnabled then logRemoteCall(self, "FireServer", {...}) end
-                return oldFireServer(self, ...)
-            end)
-
-            oldInvokeServer = hookfunction(tempFunc.InvokeServer, function(self, ...)
-                if remoteSpyEnabled then logRemoteCall(self, "InvokeServer", {...}) end
-                return oldInvokeServer(self, ...)
-            end)
-
-            tempRemote:Destroy()
-            tempFunc:Destroy()
-        end)
-        if success then
-            Library:Notify({ Title = "Remote Spy", Description = "Hooked via hookfunction", Time = 2 })
-            return
-        else
-            warn("[RemoteSpy] hookfunction failed: " .. tostring(err))
-        end
-    end
-
-    if getrawmetatable and setreadonly then
-        local mt = getrawmetatable(game)
-        local oldNamecall = mt.__namecall
-        local success, err = pcall(function()
-            setreadonly(mt, false)
-            mt.__namecall = newcclosure(function(self, ...)
-                local method = getnamecallmethod()
-                if remoteSpyEnabled and (method == "FireServer" or method == "InvokeServer") then
-                    logRemoteCall(self, method, {...})
-                end
-                return oldNamecall(self, ...)
-            end)
-            setreadonly(mt, true)
-        end)
-        if success then
-            Library:Notify({ Title = "Remote Spy", Description = "Hooked via namecall", Time = 2 })
-            return
-        else
-            warn("[RemoteSpy] namecall hook failed: " .. tostring(err))
-            pcall(function()
-                setreadonly(mt, false)
-                mt.__namecall = oldNamecall
-                setreadonly(mt, true)
-            end)
-        end
-    end
-
-    Library:Notify({ Title = "Remote Spy", Description = "Running in passive mode (no hooks available)", Time = 4 })
-    
-    if Remotes then
-        print("[RemoteSpy] === Available Remotes ===")
-        for _, folder in ipairs(Remotes:GetChildren()) do
-            for _, remote in ipairs(folder:GetChildren()) do
-                if remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction") then
-                    print(string.format("[RemoteSpy] %s: %s", remote.ClassName, remote:GetFullName()))
-                    table.insert(remoteSpyLogs, {
-                        Type = remote.ClassName,
-                        Method = "Discovered",
-                        Name = remote.Name,
-                        Path = remote:GetFullName(),
-                        Args = {},
-                        Time = os.date("%H:%M:%S")
-                    })
-                end
-            end
-        end
-        print("[RemoteSpy] === End of Remote List ===")
-    end
+    Library:Notify({ Title = "Rejoin", Description = "Server unavailable - rejoining via matchmaking...", Time = 3 })
 end
 
 local autoPickupActive = false
@@ -2413,103 +1802,6 @@ local function startRepairAura()
     end)
 end
 
-local bringPickupActive = false
-local bringPickupThread = nil
-
-local function stopBringPickup()
-    bringPickupActive = false
-    if bringPickupThread then
-        task.cancel(bringPickupThread)
-        bringPickupThread = nil
-    end
-end
-
-local function startBringPickup()
-    stopBringPickup()
-    bringPickupActive = true
-
-    bringPickupThread = task.spawn(function()
-        local MAX_TIMEOUTS = 3
-        local consecutiveTimeouts = 0
-
-        while bringPickupActive and Toggles.BringPickupItem.Value do
-            local char = LocalPlayer.Character
-            local rootPart = char and char:FindFirstChild("HumanoidRootPart")
-            if not rootPart then task.wait(0.5) continue end
-            if not droppedItemsFolder then task.wait(1) continue end
-
-            local playerPos = rootPart.Position
-            local allSelected = Toggles.BringAllPickup and Toggles.BringAllPickup.Value
-            local whitelist = Options.BringPickupWhitelist and Options.BringPickupWhitelist.Value or {}
-
-            local targets = {}
-            for _, item in ipairs(droppedItemsFolder:GetChildren()) do
-                if not pickupItemSet[item.Name] then continue end
-                local mp = item.PrimaryPart or getItemMainPart(item)
-                if not mp then continue end
-                local d = (mp.Position - playerPos).Magnitude
-                if not allSelected then
-                    if not whitelist[item.Name] then continue end
-                end
-                table.insert(targets, { item = item, part = mp, dist = d })
-            end
-
-            if #targets == 0 then task.wait(0.5) continue end
-
-            local sortOrder = Options.BringPickupSortOrder and Options.BringPickupSortOrder.Value or "Nearest First"
-            if sortOrder == "Nearest First" then
-                table.sort(targets, function(a, b) return a.dist < b.dist end)
-            elseif sortOrder == "Farthest First" then
-                table.sort(targets, function(a, b) return a.dist > b.dist end)
-            elseif sortOrder == "Alphabetical" then
-                table.sort(targets, function(a, b) return a.item.Name < b.item.Name end)
-            elseif sortOrder == "Reverse Alphabetical" then
-                table.sort(targets, function(a, b) return a.item.Name > b.item.Name end)
-            end
-
-            for _, target in ipairs(targets) do
-                if not bringPickupActive then break end
-                if not target.item.Parent then continue end
-
-                local itemRef = target.item
-                local partRef = target.part
-                local targetCF = CFrame.new(partRef.Position + Vector3.new(0, 2, 0))
-                local deadline = tick() + 2.0
-
-                while tick() < deadline and itemRef.Parent do
-                    rootPart.CFrame = targetCF
-                    pcall(function()
-                        if pickUpItemRemote then pickUpItemRemote:FireServer(itemRef) end
-                    end)
-                    task.wait(0.05)
-                end
-
-                if itemRef.Parent == nil then
-                    consecutiveTimeouts = 0
-                else
-                    consecutiveTimeouts = consecutiveTimeouts + 1
-                    if consecutiveTimeouts >= MAX_TIMEOUTS then
-                        bringPickupActive = false
-                        task.defer(function()
-                            if Toggles.BringPickupItem then
-                                Toggles.BringPickupItem:SetValue(false)
-                            end
-                            Library:Notify({
-                                Title = "Bring Pickup Item",
-                                Description = "Backpack full â€“ auto disabled.",
-                                Time = 4,
-                            })
-                        end)
-                        return
-                    end
-                end
-            end
-        end
-
-        bringPickupActive = false
-    end)
-end
-
 local playerAddedConn = Players.PlayerAdded:Connect(function(player)
     if playerESPVars.ESP then
         task.wait(2)
@@ -2523,16 +1815,9 @@ local playerRemovingConn = Players.PlayerRemoving:Connect(function(player)
 end)
 table.insert(connections, playerRemovingConn)
 
-LocalPlayer.CharacterRemoving:Connect(function()
-    if flyActive then stopFly() end
-    if autoSprintActive then stopAutoSprint() end
-end)
-
 LocalPlayer.CharacterAdded:Connect(function(char)
     char:WaitForChild("HumanoidRootPart", 10)
     task.wait(0.5)
-    if Toggles.Fly and Toggles.Fly.Value then startFly() end
-    if Toggles.AutoSprint and Toggles.AutoSprint.Value then startAutoSprint() end
     if Toggles.AutoPickup and Toggles.AutoPickup.Value then startAutoPickup() end
 end)
 
@@ -2730,7 +2015,7 @@ movementGroup:AddToggle("InfJump", {
 })
 
 local jumpConn = UserInputService.JumpRequest:Connect(function()
-    if Toggles.InfJump.Value then
+    if Toggles.InfJump and Toggles.InfJump.Value then
         local char = LocalPlayer.Character
         if char then
             local humanoid = char:FindFirstChildOfClass("Humanoid")
@@ -2752,82 +2037,6 @@ movementGroup:AddToggle("NoClip", {
             Time = 2,
         })
     end,
-})
-
-movementGroup:AddToggle("Fly", {
-    Text = "Fly",
-    Default = false,
-    Callback = function(state)
-        if state then
-            startFly()
-            Library:Notify({ Title = "Fly", Description = "Enabled - WASD to move, Space/Shift for up/down", Time = 3 })
-        else
-            stopFly()
-            Library:Notify({ Title = "Fly", Description = "Disabled", Time = 2 })
-        end
-    end,
-})
-
-movementGroup:AddSlider("FlySpeed", {
-    Text = "Fly Speed",
-    Default = 50,
-    Min = 10,
-    Max = 300,
-    Rounding = 0,
-    Suffix = " studs/s",
-})
-
-movementGroup:AddToggle("AutoSprint", {
-    Text = "Auto Sprint",
-    Default = false,
-    Callback = function(state)
-        if state then
-            startAutoSprint()
-            Library:Notify({ Title = "Auto Sprint", Description = "Enabled (holding LeftShift)", Time = 2 })
-        else
-            stopAutoSprint()
-            Library:Notify({ Title = "Auto Sprint", Description = "Disabled", Time = 2 })
-        end
-    end,
-})
-
-movementGroup:AddToggle("BunnyHop", {
-    Text = "Bunny Hop",
-    Default = false,
-    Tooltip = "Automatically jumps while moving for speed/momentum boost.",
-    Callback = function(state)
-        if state then
-            startBhop()
-            Library:Notify({ Title = "Bunny Hop", Description = "Enabled - jump while moving!", Time = 2 })
-        else
-            stopBhop()
-            Library:Notify({ Title = "Bunny Hop", Description = "Disabled", Time = 2 })
-        end
-    end,
-})
-
-local danceGroup = Tabs.Player:AddRightGroupbox("Funny Dance FE", "music")
-
-danceGroup:AddToggle("FunnyDance", {
-    Text = "Funny Dance",
-    Default = false,
-    Tooltip = "Plays a looping dance animation visible to all players. FE compatible!",
-    Callback = function(state)
-        if state then
-            startFunnyDance()
-            Library:Notify({ Title = "Funny Dance", Description = "Enabled â€“ everyone can see your moves!", Time = 3 })
-        else
-            stopFunnyDance()
-            Library:Notify({ Title = "Funny Dance", Description = "Disabled", Time = 2 })
-        end
-    end,
-})
-
-danceGroup:AddDropdown("DanceStyle", {
-    Values = { "Shuffle (Dance 1)", "Twist (Dance 2)", "Robot (Dance 3)" },
-    Default = 1,
-    Text = "Dance Style",
-    Tooltip = "Select dance style. Toggle off and on again to apply a new style.",
 })
 
 end
@@ -2892,104 +2101,13 @@ killAuraGroup:AddSlider("KillAuraSwingRate", {
     Max = 1.0,
     Rounding = 2,
     Suffix = " s",
-    Tooltip = "Minimum delay between swings. Weapon speed is always enforced as a hard lower bound â€” you can never swing faster than the weapon physically allows (safe mode).",
+    Tooltip = "Minimum delay between swings. Weapon speed is always enforced as a hard lower bound.",
 })
 
 killAuraGroup:AddLabel("Weapon Speeds:", { DoesWrap = true })
 killAuraGroup:AddLabel(" Knife/Katana: 0.25-0.3s", { DoesWrap = true })
 killAuraGroup:AddLabel(" Bat/Hatchet: 0.4-0.45s", { DoesWrap = true })
 killAuraGroup:AddLabel(" Fire Axe/Sledgehammer: 0.55-0.6s", { DoesWrap = true })
-
-local aimbotGroup = Tabs.Combat:AddRightGroupbox("Aimbot", "crosshair")
-
-aimbotGroup:AddToggle("Aimbot", {
-    Text = "Aimbot",
-    Default = false,
-    Tooltip = "Automatically aims camera at the nearest valid target within FOV and range.",
-    Callback = function(state)
-        if state then
-            startAimbot()
-            Library:Notify({ Title = "Aimbot", Description = "Enabled - aim at targets!", Time = 2 })
-        else
-            stopAimbot()
-            Library:Notify({ Title = "Aimbot", Description = "Disabled", Time = 2 })
-        end
-    end,
-})
-
-aimbotGroup:AddDropdown("AimbotTarget", {
-    Text = "Target Mode",
-    Default = "Mobs",
-    Values = {"Mobs", "Players", "Both"},
-    Tooltip = "What type of entities to target. Mobs = zombies/monsters, Players = other players, Both = either.",
-})
-
-aimbotGroup:AddDropdown("AimbotPart", {
-    Text = "Aim Part",
-    Default = "Head",
-    Values = {"Head", "HumanoidRootPart", "Torso", "UpperTorso"},
-    Tooltip = "Which body part to aim at. Head = headshots, HumanoidRootPart = center mass.",
-})
-
-aimbotGroup:AddDropdown("AimbotPriority", {
-    Text = "Target Priority",
-    Default = "Distance",
-    Values = {"Distance", "FOV"},
-    Tooltip = "How to choose which target to aim at. Distance = closest in 3D space, FOV = closest to crosshair.",
-})
-
-aimbotGroup:AddSlider("AimbotRange", {
-    Text = "Max Range",
-    Default = 200,
-    Min = 50,
-    Max = 1000,
-    Rounding = 0,
-    Suffix = " studs",
-    Tooltip = "Maximum distance to search for targets.",
-})
-
-aimbotGroup:AddSlider("AimbotFOV", {
-    Text = "FOV Radius",
-    Default = 100,
-    Min = 10,
-    Max = 500,
-    Rounding = 0,
-    Suffix = " px",
-    Tooltip = "Maximum distance from screen center to consider targets. Lower = more precise, higher = wider aim.",
-})
-
-aimbotGroup:AddSlider("AimbotSmoothness", {
-    Text = "Smoothness",
-    Default = 0.3,
-    Min = 0,
-    Max = 1,
-    Rounding = 2,
-    Tooltip = "0 = instant snap, 1 = very smooth tracking. Higher = more legit-looking.",
-})
-
-aimbotGroup:AddToggle("AimbotPrediction", {
-    Text = "Velocity Prediction",
-    Default = false,
-    Tooltip = "Predict where moving targets will be based on their velocity.",
-})
-
-aimbotGroup:AddSlider("AimbotPredictionAmount", {
-    Text = "Prediction Amount",
-    Default = 0.15,
-    Min = 0.05,
-    Max = 0.5,
-    Rounding = 2,
-    Suffix = " s",
-    Tooltip = "How far ahead to predict. Higher = more prediction for fast-moving targets.",
-})
-
-aimbotGroup:AddDivider()
-
-aimbotGroup:AddToggle("AimbotFOVCircle", {
-    Text = "FOV Circle",
-    Default = false,
-    Tooltip = "Draw a circle on screen showing the current Aimbot FOV radius.",
-})
 
 end
 
@@ -3003,7 +2121,7 @@ autoPickupGroup:AddToggle("AutoPickup", {
     Callback = function(state)
         if state then
             startAutoPickup()
-            Library:Notify({ Title = "Auto Pickup", Description = "Active â€“ " .. (Options.AutoPickupRadius and Options.AutoPickupRadius.Value or 20) .. " stud radius", Time = 2 })
+            Library:Notify({ Title = "Auto Pickup", Description = "Active", Time = 2 })
         else
             stopAutoPickup()
             Library:Notify({ Title = "Auto Pickup", Description = "Stopped", Time = 2 })
@@ -3031,21 +2149,21 @@ autoPickupGroup:AddDivider()
 autoPickupGroup:AddLabel("FE Methods (combine to test)", { DoesWrap = true })
 
 autoPickupGroup:AddToggle("AutoPickupMethodRemote", {
-    Text = "A â€“ Remote (PickUpItem)",
+    Text = "A - Remote (PickUpItem)",
     Default = true,
     Tooltip = "FireServer on Remotes.Interaction.PickUpItem + AdjustBackpack. Fast, works when server has no strict distance check.",
 })
 
 autoPickupGroup:AddToggle("AutoPickupMethodTouch", {
-    Text = "B â€“ Touch Simulate",
+    Text = "B - Touch Simulate",
     Default = true,
-    Tooltip = "firetouchinterest(HRP, itemPart) â€“ simulates the player touching the item part. Fires server-side Touched handlers.",
+    Tooltip = "firetouchinterest(HRP, itemPart) - simulates the player touching the item part. Fires server-side Touched handlers.",
 })
 
 autoPickupGroup:AddToggle("AutoPickupMethodPrompt", {
-    Text = "C â€“ ProximityPrompt",
+    Text = "C - ProximityPrompt",
     Default = true,
-    Tooltip = "fireproximityprompt(prompt) â€“ fires the item's ProximityPrompt if one exists. Useful for items using prompt-based pickup.",
+    Tooltip = "fireproximityprompt(prompt) - fires the item's ProximityPrompt if one exists. Useful for items using prompt-based pickup.",
 })
 
 autoPickupGroup:AddDivider()
@@ -3075,48 +2193,7 @@ autoPickupGroup:AddDropdown("AutoPickupBlacklist", {
     },
     Multi = true,
     Text = "Blacklist",
-    Tooltip = "Blacklisted items skip the PickUpItem remote. AdjustBackpack still fires so they are stored. Pre-selected: all items not in the Bring Pickup filter (Food, Fuel, Resources, Misc, Abilities).",
-    Searchable = true,
-})
-
-local bringPickupGroup = Tabs.Exploits:AddRightGroupbox("Bring Pickup Item", "download")
-
-bringPickupGroup:AddToggle("BringPickupItem", {
-    Text = "Bring Pickup Item",
-    Default = false,
-    Tooltip = "Loop-teleports to E-key items (Guns, Medical, Ammo, Armor...). Stops automatically when full.",
-    Callback = function(state)
-        if state then
-            startBringPickup()
-            Library:Notify({ Title = "Bring Pickup Item", Description = "Enabled!", Time = 2 })
-        else
-            stopBringPickup()
-            Library:Notify({ Title = "Bring Pickup Item", Description = "Disabled", Time = 2 })
-        end
-    end,
-})
-
-bringPickupGroup:AddToggle("BringAllPickup", {
-    Text = "All Pickup Items",
-    Default = false,
-    Tooltip = "Pick up all E-key items without a filter.",
-})
-
-bringPickupGroup:AddDropdown("BringPickupSortOrder", {
-    Values = {"Nearest First", "Farthest First", "Alphabetical", "Reverse Alphabetical"},
-    Default = 1,
-    Text = "Sort Order",
-    Tooltip = "Sets which items are picked up first.",
-})
-
-bringPickupGroup:AddDivider()
-bringPickupGroup:AddLabel("Filter (" .. #pickupItemNames .. " Items)")
-bringPickupGroup:AddDropdown("BringPickupWhitelist", {
-    Values = pickupItemNames,
-    Default = 1,
-    Multi = true,
-    Text = "Item Filter",
-    Tooltip = "Only active when 'All Pickup Items' is off.",
+    Tooltip = "Blacklisted items skip the PickUpItem remote. AdjustBackpack still fires so they are stored.",
     Searchable = true,
 })
 
@@ -3129,7 +2206,7 @@ repairAuraGroup:AddToggle("RepairAura", {
     Callback = function(state)
         if state then
             startRepairAura()
-            Library:Notify({ Title = "Repair Aura", Description = "Active â€“ repairing structures within " .. (Options.RepairAuraRange and Options.RepairAuraRange.Value or 30) .. " studs", Time = 2 })
+            Library:Notify({ Title = "Repair Aura", Description = "Active", Time = 2 })
         else
             stopRepairAura()
             Library:Notify({ Title = "Repair Aura", Description = "Stopped", Time = 2 })
@@ -3225,63 +2302,6 @@ serverGroup:AddDivider()
 serverGroup:AddLabel("Current Job ID:")
 serverGroup:AddLabel("JobId", { Text = game.JobId ~= "" and game.JobId:sub(1, 30) .. "..." or "Unknown", DoesWrap = true })
 
-local remoteSpyGroup = Tabs.Misc:AddRightGroupbox("Remote Spy", "bug")
-
-remoteSpyGroup:AddToggle("RemoteSpyEnabled", {
-    Text = "Enable Remote Spy",
-    Default = false,
-    Tooltip = "Logs all RemoteEvent/RemoteFunction calls for analysis.",
-    Callback = function(state)
-        if state then
-            startRemoteSpy()
-        else
-            stopRemoteSpy()
-        end
-    end,
-})
-
-remoteSpyGroup:AddLabel("Logs remote calls to console.")
-remoteSpyGroup:AddLabel("Check Developer Console (F9)")
-
-local fpsUnlockerGroup = Tabs.Misc:AddRightGroupbox("FPS Unlocker", "zap")
-
-fpsUnlockerGroup:AddSlider("FPSCap", {
-    Text = "FPS Cap",
-    Default = 144,
-    Min = 30,
-    Max = 360,
-    Rounding = 0,
-    Suffix = " fps",
-    Tooltip = "Set the target FPS cap. Applied when Unlock FPS is enabled.",
-    Callback = function(value)
-        if Toggles.FPSUnlock and Toggles.FPSUnlock.Value then
-            pcall(function() if setfpscap then setfpscap(value) end end)
-        end
-    end,
-})
-
-fpsUnlockerGroup:AddToggle("FPSUnlock", {
-    Text = "Unlock FPS",
-    Default = false,
-    Tooltip = "Remove the default 60 FPS cap using setfpscap() executor API.",
-    Callback = function(state)
-        pcall(function()
-            if setfpscap then
-                if state then
-                    local cap = Options.FPSCap and Options.FPSCap.Value or 144
-                    setfpscap(cap)
-                    Library:Notify({ Title = "FPS Unlocker", Description = "FPS cap set to " .. cap, Time = 2 })
-                else
-                    setfpscap(60)
-                    Library:Notify({ Title = "FPS Unlocker", Description = "FPS restored to 60", Time = 2 })
-                end
-            else
-                Library:Notify({ Title = "FPS Unlocker", Description = "setfpscap() not available in this executor.", Time = 3 })
-            end
-        end)
-    end,
-})
-
 end
 
 Library:OnUnload(function()
@@ -3311,17 +2331,8 @@ Library:OnUnload(function()
     connections = {}
 
     stopAutoPickup()
-    stopBringPickup()
     stopRepairAura()
-    stopFly()
-    stopAutoSprint()
     stopKillAura()
-    stopAimbot()
-    stopBhop()
-    stopFunnyDance()
-    stopRemoteSpy()
-    pcall(function() if setfpscap then setfpscap(60) end end)
-    if fovCircle then pcall(function() fovCircle:Remove() end); fovCircle = nil end
     if Toggles.RemoveFog and Toggles.RemoveFog.Value then
         disableRemoveFog()
     end
