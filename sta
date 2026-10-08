@@ -209,7 +209,7 @@ local autoPickupCategories = {
     Melee = true,
     Medical = true,
     Armor = true,
-    Food = true,
+    Food = false,
     Resource = true,
     Fuel = true,
     Ability = true,
@@ -1696,16 +1696,13 @@ local function startAutoPickup()
                 if autoPickupAttempts[item] and (now - autoPickupAttempts[item]) < 0.35 then continue end
                 autoPickupAttempts[item] = now
 
-                if useRemote then
+                if useRemote and item.Parent then
                     pcall(function()
                         if pickUpItemRemote then pickUpItemRemote:FireServer(item) end
                     end)
-                    pcall(function()
-                        if adjustBackpackRemote then adjustBackpackRemote:FireServer(item) end
-                    end)
                 end
 
-                if useTouch then
+                if useTouch and item.Parent then
                     pcall(function()
                         if firetouchinterest then
                             firetouchinterest(hrp, mainPart, 0)
@@ -1714,7 +1711,7 @@ local function startAutoPickup()
                     end)
                 end
 
-                if usePrompt then
+                if usePrompt and item.Parent then
                     pcall(function()
                         if fireproximityprompt then
                             local prompt = item:FindFirstChildWhichIsA("ProximityPrompt", true)
