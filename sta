@@ -209,7 +209,7 @@ local autoPickupCategories = {
     Melee = true,
     Medical = true,
     Armor = true,
-    Food = false,
+    Food = true,
     Resource = true,
     Fuel = true,
     Ability = true,
@@ -1696,36 +1696,31 @@ local function startAutoPickup()
                 if autoPickupAttempts[item] and (now - autoPickupAttempts[item]) < 0.35 then continue end
                 autoPickupAttempts[item] = now
 
-                local isFuel = (itemCat == "Fuel")
-                local actionDone = false
-
-                if useRemote and item.Parent then
+                if useRemote then
                     pcall(function()
-                        if pickUpItemRemote then
-                            pickUpItemRemote:FireServer(item)
-                            actionDone = true
-                        end
+                        if pickUpItemRemote then pickUpItemRemote:FireServer(item) end
                     end)
+                    if itemCat ~= "Fuel" and itemCat ~= "Resource" then
+                        pcall(function()
+                            if adjustBackpackRemote then adjustBackpackRemote:FireServer(item) end
+                        end)
+                    end
                 end
 
-                if not actionDone and not isFuel and useTouch and item.Parent then
+                if useTouch then
                     pcall(function()
                         if firetouchinterest then
                             firetouchinterest(hrp, mainPart, 0)
                             firetouchinterest(hrp, mainPart, 1)
-                            actionDone = true
                         end
                     end)
                 end
 
-                if not actionDone and usePrompt and item.Parent then
+                if usePrompt then
                     pcall(function()
                         if fireproximityprompt then
                             local prompt = item:FindFirstChildWhichIsA("ProximityPrompt", true)
-                            if prompt then
-                                fireproximityprompt(prompt)
-                                actionDone = true
-                            end
+                            if prompt then fireproximityprompt(prompt) end
                         end
                     end)
                 end
