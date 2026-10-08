@@ -1674,19 +1674,6 @@ local function startAutoPickup()
             local myPos = hrp.Position
             local radius = Options.AutoPickupRadius and Options.AutoPickupRadius.Value or 7
 
-            local centerTile = Workspace:FindFirstChild("Map")
-                and Workspace.Map:FindFirstChild("Tiles")
-                and Workspace.Map.Tiles:FindFirstChild("Center")
-            if centerTile then
-                local ok, cf, size = pcall(function() return centerTile:GetBoundingBox() end)
-                if ok and cf and size then
-                    local localPos = cf:PointToObjectSpace(myPos)
-                    if math.abs(localPos.X) <= size.X / 2 and math.abs(localPos.Z) <= size.Z / 2 then
-                        task.wait(0.5) continue
-                    end
-                end
-            end
-
             local useRemote = not Toggles.AutoPickupMethodRemote or Toggles.AutoPickupMethodRemote.Value
             local useTouch = not Toggles.AutoPickupMethodTouch or Toggles.AutoPickupMethodTouch.Value
             local usePrompt = not Toggles.AutoPickupMethodPrompt or Toggles.AutoPickupMethodPrompt.Value
