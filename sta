@@ -61,15 +61,15 @@ local originalValues = {
 local originalLighting = { stored = false }
 local originalFog = { stored = false }
 
-local mobOptions = { ESP = false, Chams = false, Name = false, Distance = false }
-local playerESPVars = { ESP = false, Chams = false, Name = false, Distance = false, Health = false }
-local structureESPVars = { ESP = false, Chams = false, Name = false, Distance = false }
+local mobOptions = { ESP = true, Chams = true, Name = true, Distance = true }
+local playerESPVars = { ESP = false, Chams = false, Name = true, Distance = true, Health = false }
+local structureESPVars = { ESP = false, Chams = false, Name = true, Distance = true }
 
 local mobNames = {"Runner", "Crawler", "Riot", "Zombie", "Brute", "Spitter", "Boss"}
 
 local espConfig = {
-    textSize = 10,
-    fillTransparency = 0.4,
+    textSize = 8,
+    fillTransparency = 0.0,
     outlineTransparency = 0.0,
 }
 
@@ -162,7 +162,7 @@ for _, def in ipairs(espDefinitions) do
         colors = def.colors,
         items = def.items,
         itemList = {},
-        vars = { ESP = false, Chams = false, Name = false, Distance = false },
+        vars = { ESP = true, Chams = false, Name = true, Distance = true },
         instances = {},
         listenersSetup = false,
     }
@@ -1294,7 +1294,7 @@ local function startKillAura()
             local hitTargets = tool:FindFirstChild("HitTargets")
             local remoteClick = tool:FindFirstChild("RemoteClick")
 
-            local baseRange = Options.KillAuraRange and Options.KillAuraRange.Value or 6
+            local baseRange = Options.KillAuraRange and Options.KillAuraRange.Value or 20
             local useExtendedRange = Toggles.KillAuraExtendedRange and Toggles.KillAuraExtendedRange.Value
             local attackRange = useExtendedRange and (baseRange + 2) or baseRange
 
@@ -1585,9 +1585,9 @@ local function serverHop()
                 end
             end
 
-            local nextCursor = data.nextPageCursor
-            if not nextCursor or nextCursor == "" or nextCursor == "null" then break end
-            cursor = tostring(nextCursor)
+            local nextPageCursor = data.nextPageCursor
+            if not nextPageCursor or nextPageCursor == "" or nextPageCursor == "null" then break end
+            cursor = tostring(nextPageCursor)
         end
     end
 
@@ -1867,7 +1867,7 @@ do
 local espSettingsGroup = Tabs.Visuals:AddLeftGroupbox("ESP Settings", "settings")
 
 espSettingsGroup:AddSlider("ESPMaxDistance", {
-    Text = "Max Distance", Default = 300, Min = 50, Max = 2000, Rounding = 0, Suffix = " studs",
+    Text = "Max Distance", Default = 170, Min = 50, Max = 2000, Rounding = 0, Suffix = " studs",
     Tooltip = "Maximum render distance shared by all ESP systems.",
     Callback = function()
         refreshMobESP(); refreshPlayerESP(); refreshStructureESP()
@@ -1889,17 +1889,17 @@ local function setAllESPDistance(state)
     for _, sys in pairs(espSystems) do sys.vars.Distance = state; sys.refresh() end
 end
 
-espSettingsGroup:AddToggle("ESPShowNames", { Text = "Show Names", Default = false, Tooltip = "Show labels on all ESPs.", Callback = function(s) setAllESPNames(s) end })
-espSettingsGroup:AddToggle("ESPShowDistance", { Text = "Show Distance", Default = false, Tooltip = "Show distance on all ESPs.", Callback = function(s) setAllESPDistance(s) end })
+espSettingsGroup:AddToggle("ESPShowNames", { Text = "Show Names", Default = true, Tooltip = "Show labels on all ESPs.", Callback = function(s) setAllESPNames(s) end })
+espSettingsGroup:AddToggle("ESPShowDistance", { Text = "Show Distance", Default = true, Tooltip = "Show distance on all ESPs.", Callback = function(s) setAllESPDistance(s) end })
 
 espSettingsGroup:AddSlider("ESPTextSize", {
-    Text = "Text Size", Default = 10, Min = 8, Max = 24, Rounding = 0, Suffix = "px",
+    Text = "Text Size", Default = 8, Min = 8, Max = 24, Rounding = 0, Suffix = "px",
     Tooltip = "Font size for all ESP labels. Lower = less cluttered screen.",
     Callback = function(v) applyESPTextSize(v) end,
 })
 
 espSettingsGroup:AddSlider("ESPFillTransparency", {
-    Text = "Fill Transparency", Default = 40, Min = 0, Max = 100, Rounding = 0, Suffix = "%",
+    Text = "Fill Transparency", Default = 0, Min = 0, Max = 100, Rounding = 0, Suffix = "%",
     Tooltip = "Chams fill opacity for all ESP. 0% = fully solid, 100% = invisible fill (outline only).",
     Callback = function(v) espConfig.fillTransparency = v / 100; applyESPTransparency() end,
 })
@@ -1911,8 +1911,8 @@ espSettingsGroup:AddSlider("ESPOutlineTransparency", {
 })
 
 local mobESPGroup = Tabs.Visuals:AddLeftGroupbox("Mob ESP", "eye")
-mobESPGroup:AddToggle("MobESP", { Text = "Mob ESP", Default = false, Tooltip = "Highlight zombies/monsters through walls.", Callback = function(s) mobOptions.ESP = s; refreshMobESP() end })
-mobESPGroup:AddToggle("MobChams", { Text = "Chams", Default = false, Callback = function(s) mobOptions.Chams = s; refreshMobESP() end })
+mobESPGroup:AddToggle("MobESP", { Text = "Mob ESP", Default = true, Tooltip = "Highlight zombies/monsters through walls.", Callback = function(s) mobOptions.ESP = s; refreshMobESP() end })
+mobESPGroup:AddToggle("MobChams", { Text = "Chams", Default = true, Callback = function(s) mobOptions.Chams = s; refreshMobESP() end })
 
 local playerESPGroup = Tabs.Visuals:AddLeftGroupbox("Player ESP", "users")
 playerESPGroup:AddToggle("PlayerESP", { Text = "Player ESP", Default = false, Callback = function(s) playerESPVars.ESP = s; refreshPlayerESP() end })
@@ -1942,7 +1942,7 @@ local itemESPDefs = {
 }
 for _, d in ipairs(itemESPDefs) do
     itemESPGroup:AddToggle(d.key .. "ESPEnabled", {
-        Text = d.text, Default = false, Tooltip = d.tip,
+        Text = d.text, Default = true, Tooltip = d.tip,
         Callback = function(s) espSystems[d.key].vars.ESP = s; espSystems[d.key].refresh() end,
     }):AddColorPicker(d.key .. "ESPColor", {
         Default = espSystems[d.key].colors.fill,
@@ -1969,7 +1969,7 @@ local movementGroup = Tabs.Player:AddLeftGroupbox("Movement", "move")
 
 movementGroup:AddToggle("SpeedHack", {
     Text = "Speed Hack",
-    Default = false,
+    Default = true,
     Callback = function(state)
         if state then
             local char = LocalPlayer.Character
@@ -1995,7 +1995,7 @@ movementGroup:AddToggle("SpeedHack", {
 
 movementGroup:AddSlider("SpeedValue", {
     Text = "Walk Speed",
-    Default = 50,
+    Default = 28,
     Min = 16,
     Max = 200,
     Rounding = 0,
@@ -2046,7 +2046,7 @@ local killAuraGroup = Tabs.Combat:AddLeftGroupbox("Kill Aura", "target")
 
 killAuraGroup:AddToggle("KillAura", {
     Text = "Kill Aura",
-    Default = false,
+    Default = true,
     Tooltip = "AoE auto-attack: hits ALL mobs in range in one swing. Priority, auto-equip, and visual indicator configurable below.",
     Callback = function(state)
         if state then
@@ -2086,7 +2086,7 @@ killAuraGroup:AddToggle("KillAuraExtendedRange", {
 
 killAuraGroup:AddSlider("KillAuraRange", {
     Text = "Base Range",
-    Default = 6,
+    Default = 20,
     Min = 1,
     Max = 20,
     Rounding = 0,
@@ -2096,7 +2096,7 @@ killAuraGroup:AddSlider("KillAuraRange", {
 
 killAuraGroup:AddSlider("KillAuraSwingRate", {
     Text = "Swing Delay",
-    Default = 0.5,
+    Default = 0.1,
     Min = 0.1,
     Max = 1.0,
     Rounding = 2,
@@ -2116,7 +2116,7 @@ local autoPickupGroup = Tabs.Exploits:AddLeftGroupbox("Auto Pickup", "magnet")
 
 autoPickupGroup:AddToggle("AutoPickup", {
     Text = "Auto Pickup",
-    Default = false,
+    Default = true,
     Tooltip = "Automatically picks up items within radius. Uses up to 4 FE methods in parallel.",
     Callback = function(state)
         if state then
@@ -2131,7 +2131,7 @@ autoPickupGroup:AddToggle("AutoPickup", {
 
 autoPickupGroup:AddSlider("AutoPickupRadius", {
     Text = "Radius",
-    Default = 20,
+    Default = 7,
     Min = 5,
     Max = 35,
     Rounding = 0,
@@ -2141,7 +2141,7 @@ autoPickupGroup:AddSlider("AutoPickupRadius", {
 
 autoPickupGroup:AddToggle("AutoPickupAll", {
     Text = "All Items",
-    Default = false,
+    Default = true,
     Tooltip = "Pick up every item in the folder. Disable to use the whitelist filter below.",
 })
 
@@ -2258,7 +2258,7 @@ utilityGroup:AddToggle("AntiAFK", {
 
 utilityGroup:AddToggle("Fullbright", {
     Text = "Fullbright",
-    Default = false,
+    Default = true,
     Tooltip = "Brightens the game world by modifying lighting properties. Restores originals when disabled.",
     Callback = function(state)
         if state then
@@ -2273,7 +2273,7 @@ utilityGroup:AddToggle("Fullbright", {
 
 utilityGroup:AddToggle("RemoveFog", {
     Text = "Remove Fog",
-    Default = false,
+    Default = true,
     Tooltip = "Removes visual fog for clear long-distance visibility. Restores original fog when disabled.",
     Callback = function(state)
         if state then
