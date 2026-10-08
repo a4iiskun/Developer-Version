@@ -225,32 +225,6 @@ local function discoverFolders()
 end
 discoverFolders()
 
-task.spawn(function()
-    while not Library.Unloaded do
-        task.wait(5)
-        local prevChars = charactersFolder
-        local prevItems = droppedItemsFolder
-        local prevStructs = structuresFolder
-        discoverFolders()
-        if charactersFolder ~= prevChars and charactersFolder then
-            refreshMobESP()
-            if not mobListenersSetup then setupMobListeners() end
-        end
-        if droppedItemsFolder ~= prevItems and droppedItemsFolder then
-            for _, sys in pairs(espSystems) do
-                sys.refresh()
-            end
-            for _, sys in pairs(espSystems) do
-                if not sys.listenersSetup then sys.setupListeners() end
-            end
-        end
-        if structuresFolder ~= prevStructs and structuresFolder then
-            refreshStructureESP()
-            if not structureListenersSetup then setupStructureListeners() end
-        end
-    end
-end)
-
 local function getItemMainPart(item)
     if item.PrimaryPart then return item.PrimaryPart end
     for _, child in ipairs(item:GetChildren()) do
@@ -482,10 +456,6 @@ for _, sys in pairs(espSystems) do
     sys.setupListeners = function() setupCategoryListeners(sys) end
 end
 
-for _, sys in pairs(espSystems) do
-    setupCategoryListeners(sys)
-end
-
 local function removeMobESP(char)
     local esp = mobESPInstances[char]
     if esp then
@@ -618,10 +588,7 @@ local function refreshMobESP()
         removeMobESP(char)
     end
     if not mobOptions.ESP then return end
-    if not charactersFolder then
-        Library:Notify({ Title = "Mob ESP", Description = "Characters folder not found (retrying...)", Time = 3 })
-        return
-    end
+    if not charactersFolder then return end
     local playerCharSet = {}
     for _, p in ipairs(Players:GetPlayers()) do
         if p.Character then playerCharSet[p.Character] = true end
@@ -757,10 +724,7 @@ local function refreshStructureESP()
         removeStructureESP(structure)
     end
     if not structureESPVars.ESP then return end
-    if not structuresFolder then
-        Library:Notify({ Title = "Structure ESP", Description = "Structures folder not found (retrying...)", Time = 3 })
-        return
-    end
+    if not structuresFolder then return end
     for _, child in ipairs(structuresFolder:GetDescendants()) do
         if child:IsA("Model") and table.find(structureNames, child.Name) then
             createStructureESP(child)
@@ -993,7 +957,6 @@ local function setupMobListeners()
     end)
     table.insert(connections, childRemovedConn)
 end
-setupMobListeners()
 
 local function setupStructureListeners()
     if not structuresFolder or structureListenersSetup then return end
@@ -1011,16 +974,44 @@ local function setupStructureListeners()
     end)
     table.insert(connections, descendantRemovingConn)
 end
+
+task.spawn(function()
+    while not Library.Unloaded do
+        discoverFolders()
+        if charactersFolder then
+            refreshMobESP()
+            if not mobListenersSetup then setupMobListeners() end
+        end
+        if droppedItemsFolder then
+            for _, sys in pairs(espSystems) do
+                sys.refresh()
+            end
+            for _, sys in pairs(espSystems) do
+                if not sys.listenersSetup then sys.setupListeners() end
+            end
+        end
+        if structuresFolder then
+            refreshStructureESP()
+            if not structureListenersSetup then setupStructureListeners() end
+        end
+        task.wait(5)
+    end
+end)
+
+for _, sys in pairs(espSystems) do
+    setupCategoryListeners(sys)
+end
+setupMobListeners()
 setupStructureListeners()
 
 local speedHackConn = RunService.Stepped:Connect(function()
-    if not Toggles.SpeedHack then return end
-    if not Toggles.SpeedHack.Value then return end
+    if not Toggles.SpeedHack or not Toggles.SpeedHack.Value then return end
     local char = LocalPlayer.Character
     if not char then return end
     local humanoid = char:FindFirstChildOfClass("Humanoid")
     if humanoid then
-        humanoid.WalkSpeed = Options.SpeedValue.Value
+        local targetSpeed = Options and Options.SpeedValue and Options.SpeedValue.Value or 28
+        humanoid.WalkSpeed = targetSpeed
     end
 end)
 table.insert(connections, speedHackConn)
@@ -1264,7 +1255,7 @@ local function startKillAura()
     end)
 
     killAuraConn = RunService.Heartbeat:Connect(function()
-        if not Toggles.KillAura or not Toggles.KillAura.Value then
+        if Toggles.KillAura and not Toggles.KillAura.Value then
             killAuraCurrentTarget = nil
             if killAuraIndicatorLine then killAuraIndicatorLine.Visible = false end
             if killAuraIndicatorCircle then killAuraIndicatorCircle.Visible = false end
@@ -1295,14 +1286,14 @@ local function startKillAura()
             local remoteClick = tool:FindFirstChild("RemoteClick")
 
             local baseRange = Options.KillAuraRange and Options.KillAuraRange.Value or 20
-            local useExtendedRange = Toggles.KillAuraExtendedRange and Toggles.KillAuraExtendedRange.Value
+            local useExtendedRange = not Toggles.KillAuraExtendedRange or Toggles.KillAuraExtendedRange.Value
             local attackRange = useExtendedRange and (baseRange + 2) or baseRange
 
             local targets = findTargetsInRange(attackRange)
             killAuraCurrentTarget = targets[1] and targets[1].mob or nil
             killAuraTargetDistance = targets[1] and targets[1].dist or nil
 
-            local showIndicator = Toggles.KillAuraShowIndicator and Toggles.KillAuraShowIndicator.Value
+            local showIndicator = not Toggles.KillAuraShowIndicator or Toggles.KillAuraShowIndicator.Value
             if showIndicator and killAuraCurrentTarget then
                 local camera = Workspace.CurrentCamera
                 if camera then
@@ -1483,7 +1474,7 @@ local function enableRemoveFog()
     fogFEConns = {}
 
     table.insert(fogFEConns, Lighting.Changed:Connect(function(prop)
-        if not (Toggles.RemoveFog and Toggles.RemoveFog.Value) then return end
+        if Toggles.RemoveFog and not Toggles.RemoveFog.Value then return end
         if prop == "FogEnd" then Lighting.FogEnd = 100000 end
         if prop == "FogStart" then Lighting.FogStart = 0 end
     end))
@@ -1491,7 +1482,7 @@ local function enableRemoveFog()
     local atmosphere = Lighting:FindFirstChildOfClass("Atmosphere")
     if atmosphere then
         table.insert(fogFEConns, atmosphere.Changed:Connect(function(prop)
-            if not (Toggles.RemoveFog and Toggles.RemoveFog.Value) then return end
+            if Toggles.RemoveFog and not Toggles.RemoveFog.Value then return end
             if prop == "Density" then atmosphere.Density = 0 end
             if prop == "Haze" then atmosphere.Haze = 0 end
             if prop == "Glare" then atmosphere.Glare = 0 end
@@ -1514,7 +1505,7 @@ local function enableRemoveFog()
         end
 
         table.insert(fogFEConns, fogFolder.ChildAdded:Connect(function(child)
-            if not (Toggles.RemoveFog and Toggles.RemoveFog.Value) then return end
+            if Toggles.RemoveFog and not Toggles.RemoveFog.Value then return end
             makeFogObjectInvisible(child)
             for _, desc in ipairs(child:GetDescendants()) do
                 makeFogObjectInvisible(desc)
@@ -1655,14 +1646,18 @@ local function startAutoPickup()
     pcall(function() if setsimulationradius then setsimulationradius(2048, 2048) end end)
 
     autoPickupThread = task.spawn(function()
-        while autoPickupActive and Toggles.AutoPickup and Toggles.AutoPickup.Value do
+        while autoPickupActive do
+            if Toggles.AutoPickup and not Toggles.AutoPickup.Value then
+                break
+            end
+
             local char = LocalPlayer.Character
             local hrp = char and char:FindFirstChild("HumanoidRootPart")
             if not hrp or not droppedItemsFolder then task.wait(0.5) continue end
 
             local myPos = hrp.Position
-            local radius = Options.AutoPickupRadius and Options.AutoPickupRadius.Value or 20
-            local allItems = Toggles.AutoPickupAll and Toggles.AutoPickupAll.Value
+            local radius = Options.AutoPickupRadius and Options.AutoPickupRadius.Value or 7
+            local allItems = not Toggles.AutoPickupAll or Toggles.AutoPickupAll.Value
             local whitelist = Options.AutoPickupWhitelist and Options.AutoPickupWhitelist.Value or {}
             local blacklist = Options.AutoPickupBlacklist and Options.AutoPickupBlacklist.Value or {}
 
@@ -1685,6 +1680,7 @@ local function startAutoPickup()
 
             for _, item in ipairs(droppedItemsFolder:GetChildren()) do
                 if not autoPickupActive then break end
+                if Toggles.AutoPickup and not Toggles.AutoPickup.Value then break end
                 if not item.Parent then continue end
 
                 if not allItems and not whitelist[item.Name] then continue end
@@ -1819,6 +1815,7 @@ LocalPlayer.CharacterAdded:Connect(function(char)
     char:WaitForChild("HumanoidRootPart", 10)
     task.wait(0.5)
     if Toggles.AutoPickup and Toggles.AutoPickup.Value then startAutoPickup() end
+    if Toggles.KillAura and Toggles.KillAura.Value then startKillAura() end
 end)
 
 local function applyESPTextSize(size)
@@ -2426,6 +2423,19 @@ SaveManager:SetFolder("SPYMM/survive-the-apocalypse")
 SaveManager:BuildConfigSection(Tabs["UI Settings"])
 ThemeManager:ApplyToTab(Tabs["UI Settings"])
 SaveManager:LoadAutoloadConfig()
+
+if Toggles.KillAura and Toggles.KillAura.Value then startKillAura() end
+if Toggles.AutoPickup and Toggles.AutoPickup.Value then startAutoPickup() end
+if Toggles.AntiAFK and Toggles.AntiAFK.Value then startAntiAFK() end
+if Toggles.Fullbright and Toggles.Fullbright.Value then enableFullbright() end
+if Toggles.RemoveFog and Toggles.RemoveFog.Value then enableRemoveFog() end
+
+refreshMobESP()
+refreshStructureESP()
+refreshPlayerESP()
+for _, sys in pairs(espSystems) do
+    if sys.vars.ESP then sys.refresh() end
+end
 
 Library:Notify({ Title = "SPYMM v8.2", Description = "Loaded! Gun|Melee|Medical|Armor|Food|Resources\nRight Shift = toggle menu.", Time = 5 })
 
