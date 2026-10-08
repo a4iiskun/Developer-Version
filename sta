@@ -1693,26 +1693,14 @@ local function startAutoPickup()
                 if dist > radius then continue end
 
                 local now = tick()
-                local cooldown = (itemCat == "Fuel" or itemCat == "Resource") and 0.5 or 0.35
-                if autoPickupAttempts[item] and (now - autoPickupAttempts[item]) < cooldown then continue end
+                if autoPickupAttempts[item] and (now - autoPickupAttempts[item]) < 0.35 then continue end
                 autoPickupAttempts[item] = now
 
                 if itemCat == "Fuel" or itemCat == "Resource" then
                     pcall(function()
-                        if usePrompt and fireproximityprompt then
-                            local prompt = item:FindFirstChildWhichIsA("ProximityPrompt", true)
-                            if prompt then
-                                fireproximityprompt(prompt)
-                            end
-                        end
-                        if useRemote then
-                            if pickUpItemRemote then pickUpItemRemote:FireServer(item) end
-                            if adjustBackpackRemote then adjustBackpackRemote:FireServer(item) end
-                        end
-                        if useTouch and firetouchinterest and mainPart then
-                            firetouchinterest(hrp, mainPart, 0)
-                            task.wait(0.03)
-                            firetouchinterest(hrp, mainPart, 1)
+                        local Event = game:GetService("ReplicatedStorage").Remotes.Tools.AdjustBackpack
+                        if Event then
+                            Event:FireServer(item)
                         end
                     end)
                 else
