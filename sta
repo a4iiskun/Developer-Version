@@ -1696,26 +1696,36 @@ local function startAutoPickup()
                 if autoPickupAttempts[item] and (now - autoPickupAttempts[item]) < 0.35 then continue end
                 autoPickupAttempts[item] = now
 
+                local isFuel = (itemCat == "Fuel")
+                local actionDone = false
+
                 if useRemote and item.Parent then
                     pcall(function()
-                        if pickUpItemRemote then pickUpItemRemote:FireServer(item) end
-                    end)
-                end
-
-                if useTouch and item.Parent then
-                    pcall(function()
-                        if firetouchinterest then
-                            firetouchinterest(hrp, mainPart, 0)
-                            firetouchinterest(hrp, mainPart, 1)
+                        if pickUpItemRemote then
+                            pickUpItemRemote:FireServer(item)
+                            actionDone = true
                         end
                     end)
                 end
 
-                if usePrompt and item.Parent then
+                if not actionDone and not isFuel and useTouch and item.Parent then
+                    pcall(function()
+                        if firetouchinterest then
+                            firetouchinterest(hrp, mainPart, 0)
+                            firetouchinterest(hrp, mainPart, 1)
+                            actionDone = true
+                        end
+                    end)
+                end
+
+                if not actionDone and usePrompt and item.Parent then
                     pcall(function()
                         if fireproximityprompt then
                             local prompt = item:FindFirstChildWhichIsA("ProximityPrompt", true)
-                            if prompt then fireproximityprompt(prompt) end
+                            if prompt then
+                                fireproximityprompt(prompt)
+                                actionDone = true
+                            end
                         end
                     end)
                 end
