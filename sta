@@ -204,6 +204,22 @@ for catName, catItems in pairs(extraItemCategories) do
 end
 table.sort(itemNames)
 
+local autoPickupCategories = {
+    Gun = true,
+    Melee = true,
+    Medical = true,
+    Armor = true,
+    Food = true,
+    Resource = true,
+    Fuel = true,
+    Ability = true,
+    Ammo = true,
+    Consumables = true,
+    Backpacks = true,
+    MiscItems = true,
+    Structures = false,
+}
+
 local structureNames = {
     "Ammo Crate", "Barbed Wire", "Bear Trap", "Boost Pad", "Electric Fence",
     "Farm Plot", "Fence", "Floodlight", "Gate", "Landmine", "Map", "Repair Drone",
@@ -1657,9 +1673,6 @@ local function startAutoPickup()
 
             local myPos = hrp.Position
             local radius = Options.AutoPickupRadius and Options.AutoPickupRadius.Value or 7
-            local allItems = not Toggles.AutoPickupAll or Toggles.AutoPickupAll.Value
-            local whitelist = Options.AutoPickupWhitelist and Options.AutoPickupWhitelist.Value or {}
-            local blacklist = Options.AutoPickupBlacklist and Options.AutoPickupBlacklist.Value or {}
 
             local centerTile = Workspace:FindFirstChild("Map")
                 and Workspace.Map:FindFirstChild("Tiles")
@@ -1683,7 +1696,8 @@ local function startAutoPickup()
                 if Toggles.AutoPickup and not Toggles.AutoPickup.Value then break end
                 if not item.Parent then continue end
 
-                if not allItems and not whitelist[item.Name] then continue end
+                local itemCat = itemCategoryLookup[item.Name]
+                if itemCat and autoPickupCategories[itemCat] == false then continue end
 
                 local mainPart = item.PrimaryPart or getItemMainPart(item)
                 if not mainPart then continue end
@@ -1696,11 +1710,9 @@ local function startAutoPickup()
                 autoPickupAttempts[item] = now
 
                 if useRemote then
-                    if not blacklist[item.Name] then
-                        pcall(function()
-                            if pickUpItemRemote then pickUpItemRemote:FireServer(item) end
-                        end)
-                    end
+                    pcall(function()
+                        if pickUpItemRemote then pickUpItemRemote:FireServer(item) end
+                    end)
                     pcall(function()
                         if adjustBackpackRemote then adjustBackpackRemote:FireServer(item) end
                     end)
@@ -2136,12 +2148,6 @@ autoPickupGroup:AddSlider("AutoPickupRadius", {
     Tooltip = "How far away items are picked up. Combine methods A+B+C for best coverage at range.",
 })
 
-autoPickupGroup:AddToggle("AutoPickupAll", {
-    Text = "All Items",
-    Default = true,
-    Tooltip = "Pick up every item in the folder. Disable to use the whitelist filter below.",
-})
-
 autoPickupGroup:AddDivider()
 autoPickupGroup:AddLabel("FE Methods (combine to test)", { DoesWrap = true })
 
@@ -2164,35 +2170,34 @@ autoPickupGroup:AddToggle("AutoPickupMethodPrompt", {
 })
 
 autoPickupGroup:AddDivider()
-autoPickupGroup:AddLabel("Item Whitelist (when All Items is off)")
-autoPickupGroup:AddDropdown("AutoPickupWhitelist", {
-    Values = itemNames,
-    Default = 1,
-    Multi = true,
-    Text = "Whitelist",
-    Tooltip = "Items to pick up. Only active when 'All Items' is disabled.",
-    Searchable = true,
-})
+autoPickupGroup:AddLabel("Category Filter (Item Pickup Toggle)")
 
-autoPickupGroup:AddDivider()
-autoPickupGroup:AddLabel("Blacklist (blocks PickUpItem remote)")
-autoPickupGroup:AddDropdown("AutoPickupBlacklist", {
-    Values = itemNames,
-    Default = {
-        "Chips", "Carrot", "Bloxiade", "Beans", "MRE", "Bloxy Cola",
-        "Nuclear Fuel", "Refined Fuel", "Fuel",
-        "Power Armor Arm", "Power Armor Core", "Radio Tower Part",
-        "AC", "Battery", "Battery Pack", "Bucket", "Dumbell", "Exhaust Pipe",
-        "Reactor Component", "Refined Metal", "Satellite Dish", "Scrap", "Screws",
-        "Spatula", "Tray", "TV", "Watch", "Zombie Heart",
-        "Airstrike", "Attack Order", "Call of the Dead", "Summon Brute",
-        "Summon Zombies", "Taunt", "The Future", "The Past", "The Present",
-    },
-    Multi = true,
-    Text = "Blacklist",
-    Tooltip = "Blacklisted items skip the PickUpItem remote. AdjustBackpack still fires so they are stored.",
-    Searchable = true,
-})
+local pickupCategoryDefs = {
+    { key = "Gun", text = "Guns" },
+    { key = "Melee", text = "Melee Weapons" },
+    { key = "Medical", text = "Medical Items" },
+    { key = "Armor", text = "Armor" },
+    { key = "Food", text = "Food" },
+    { key = "Resource", text = "Resources" },
+    { key = "Fuel", text = "Fuel" },
+    { key = "Ability", text = "Abilities" },
+    { key = "Ammo", text = "Ammo" },
+    { key = "Consumables", text = "Consumables" },
+    { key = "Backpacks", text = "Backpacks" },
+    { key = "MiscItems", text = "Misc Items" },
+    { key = "Structures", text = "Structures" },
+}
+
+for _, catDef in ipairs(pickupCategoryDefs) do
+    autoPickupGroup:AddToggle("PickupCat_" .. catDef.key, {
+        Text = catDef.text,
+        Default = autoPickupCategories[catDef.key] ~= false,
+        Tooltip = "Enable/disable automatic pickup for " .. catDef.text,
+        Callback = function(state)
+            autoPickupCategories[catDef.key] = state
+        end,
+    })
+end
 
 local repairAuraGroup = Tabs.Exploits:AddRightGroupbox("Repair Aura", "wrench")
 
