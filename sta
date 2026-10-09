@@ -53,6 +53,7 @@ local killAuraConn = nil
 local killAuraIndicatorLine = nil
 local killAuraIndicatorCircle = nil
 local repairAuraConn = nil
+local promptOriginalDurations = {}
 
 local originalValues = {
     walkSpeed = nil,
@@ -231,6 +232,45 @@ local droppedItemsFolder = nil
 local structuresFolder = nil
 local mobListenersSetup = false
 local structureListenersSetup = false
+
+local function applyPromptDuration(prompt, isEnabled)
+    if not prompt:IsA("ProximityPrompt") then return end
+    if isEnabled then
+        if promptOriginalDurations[prompt] == nil then
+            promptOriginalDurations[prompt] = prompt.HoldDuration
+        end
+        prompt.HoldDuration = 0
+    elseif promptOriginalDurations[prompt] ~= nil then
+        prompt.HoldDuration = promptOriginalDurations[prompt]
+        promptOriginalDurations[prompt] = nil
+    end
+end
+
+local function updateInstantInteract(isEnabled)
+    if isEnabled then
+        for _, inst in ipairs(game:GetDescendants()) do
+            applyPromptDuration(inst, true)
+        end
+    else
+        for prompt, duration in pairs(promptOriginalDurations) do
+            if prompt.Parent then
+                prompt.HoldDuration = duration
+            end
+            promptOriginalDurations[prompt] = nil
+        end
+    end
+end
+
+local descendantAddedConn = game.DescendantAdded:Connect(function(inst)
+    if Toggles.InstantInteract and Toggles.InstantInteract.Value and inst:IsA("ProximityPrompt") then
+        task.defer(function()
+            if inst.Parent then
+                applyPromptDuration(inst, true)
+            end
+        end)
+    end
+end)
+table.insert(connections, descendantAddedConn)
 
 local function discoverFolders()
     charactersFolder = Workspace:FindFirstChild("Characters")
@@ -2197,6 +2237,18 @@ end
 
 local repairAuraGroup = Tabs.Exploits:AddRightGroupbox("Repair Aura", "wrench")
 
+repairAuraGroup:AddToggle("InstantInteract", {
+    Text = "Instant Interact (Delay Skip)",
+    Default = false,
+    Tooltip = "Removes hold duration from all ProximityPrompts instantly.",
+    Callback = function(state)
+        updateInstantInteract(state)
+        Library:Notify({ Title = "Instant Interact", Description = state and "Enabled - Hold duration removed!" or "Disabled - Original durations restored", Time = 2 })
+    end,
+})
+
+repairAuraGroup:AddDivider()
+
 repairAuraGroup:AddToggle("RepairAura", {
     Text = "Repair Aura",
     Default = false,
@@ -2331,6 +2383,7 @@ Library:OnUnload(function()
     stopAutoPickup()
     stopRepairAura()
     stopKillAura()
+    updateInstantInteract(false)
     if Toggles.RemoveFog and Toggles.RemoveFog.Value then
         disableRemoveFog()
     end
@@ -2430,6 +2483,7 @@ if Toggles.AutoPickup and Toggles.AutoPickup.Value then startAutoPickup() end
 if Toggles.AntiAFK and Toggles.AntiAFK.Value then startAntiAFK() end
 if Toggles.Fullbright and Toggles.Fullbright.Value then enableFullbright() end
 if Toggles.RemoveFog and Toggles.RemoveFog.Value then enableRemoveFog() end
+if Toggles.InstantInteract and Toggles.InstantInteract.Value then updateInstantInteract(true) end
 
 refreshMobESP()
 refreshStructureESP()
