@@ -62,8 +62,8 @@ local originalValues = {
 local originalLighting = { stored = false }
 local originalFog = { stored = false }
 
-local mobOptions = { ESP = true, Chams = true, Name = true, Distance = true }
-local playerESPVars = { ESP = false, Chams = false, Name = true, Distance = true, Health = false }
+local mobOptions = { ESP = false, Chams = false, Name = true, Distance = true }
+local playerESPVars = { ESP = true, Chams = true, Name = true, Distance = true, Health = false }
 local structureESPVars = { ESP = false, Chams = false, Name = true, Distance = true }
 
 local mobNames = {"Runner", "Crawler", "Riot", "Zombie", "Brute", "Spitter", "Boss"}
@@ -1066,7 +1066,7 @@ local speedHackConn = RunService.Stepped:Connect(function()
     if not char then return end
     local humanoid = char:FindFirstChildOfClass("Humanoid")
     if humanoid then
-        local targetSpeed = Options and Options.SpeedValue and Options.SpeedValue.Value or 28
+        local targetSpeed = Options and Options.SpeedValue and Options.SpeedValue.Value or 31
         humanoid.WalkSpeed = targetSpeed
     end
 end)
@@ -1956,12 +1956,12 @@ espSettingsGroup:AddSlider("ESPOutlineTransparency", {
 })
 
 local mobESPGroup = Tabs.Visuals:AddLeftGroupbox("Mob ESP", "eye")
-mobESPGroup:AddToggle("MobESP", { Text = "Mob ESP", Default = true, Tooltip = "Highlight zombies/monsters through walls.", Callback = function(s) mobOptions.ESP = s; refreshMobESP() end })
-mobESPGroup:AddToggle("MobChams", { Text = "Chams", Default = true, Callback = function(s) mobOptions.Chams = s; refreshMobESP() end })
+mobESPGroup:AddToggle("MobESP", { Text = "Mob ESP", Default = false, Tooltip = "Highlight zombies/monsters through walls.", Callback = function(s) mobOptions.ESP = s; refreshMobESP() end })
+mobESPGroup:AddToggle("MobChams", { Text = "Chams", Default = false, Callback = function(s) mobOptions.Chams = s; refreshMobESP() end })
 
 local playerESPGroup = Tabs.Visuals:AddLeftGroupbox("Player ESP", "users")
-playerESPGroup:AddToggle("PlayerESP", { Text = "Player ESP", Default = false, Callback = function(s) playerESPVars.ESP = s; refreshPlayerESP() end })
-playerESPGroup:AddToggle("PlayerChams", { Text = "Chams", Default = false, Callback = function(s) playerESPVars.Chams = s; refreshPlayerESP() end })
+playerESPGroup:AddToggle("PlayerESP", { Text = "Player ESP", Default = true, Callback = function(s) playerESPVars.ESP = s; refreshPlayerESP() end })
+playerESPGroup:AddToggle("PlayerChams", { Text = "Chams", Default = true, Callback = function(s) playerESPVars.Chams = s; refreshPlayerESP() end })
 playerESPGroup:AddToggle("PlayerHealth", { Text = "Show Health", Default = false, Tooltip = "Health bar + HP above players.", Callback = function(s) playerESPVars.Health = s; refreshPlayerESP() end })
 
 local itemESPGroup = Tabs.Visuals:AddRightGroupbox("Item ESP", "package")
@@ -2040,7 +2040,7 @@ movementGroup:AddToggle("SpeedHack", {
 
 movementGroup:AddSlider("SpeedValue", {
     Text = "Walk Speed",
-    Default = 28,
+    Default = 31,
     Min = 16,
     Max = 200,
     Rounding = 0,
