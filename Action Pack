@@ -1,0 +1,398 @@
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local player = Players.LocalPlayer
+
+local AnimationPacks = {
+{
+Name = "UFO",
+Animations = {
+idle = "rbxassetid://71749160027066",
+walk = "rbxassetid://70541694339137",
+run = "rbxassetid://113026299970703",
+jump = "rbxassetid://130562863466053",
+fall = "rbxassetid://134642898855286",
+climb = "rbxassetid://84450958572561"
+}
+},
+{
+Name = "Monster",
+Animations = {
+idle = "rbxassetid://102256898564319",
+walk = "rbxassetid://91697391503621",
+run = "rbxassetid://123327209914691",
+jump = "rbxassetid://139759235497224",
+fall = "rbxassetid://92378380652788",
+climb = "rbxassetid://132323221762736"
+}
+},
+{
+Name = "Monkey",
+Animations = {
+idle = "rbxassetid://115101545161102",
+walk = "rbxassetid://114883402230741",
+run = "rbxassetid://117978445166427",
+jump = "rbxassetid://89830607023438",
+fall = "rbxassetid://75379463314895"
+}
+},
+{
+Name = "Iron Man",
+Animations = {
+idle = "rbxassetid://125628585679463",
+walk = "rbxassetid://105363522680733",
+run = "rbxassetid://130886352199041",
+jump = "rbxassetid://132546756558556",
+fall = "rbxassetid://112252670940482",
+climb = "rbxassetid://124137036174350",
+swim = "rbxassetid://124137036174350"
+}
+},
+{
+Name = "Cart",
+Animations = {
+idle = "rbxassetid://105215536224541",
+walk = "rbxassetid://98740506306680",
+run = "rbxassetid://81300878920248",
+jump = "rbxassetid://140366673593613",
+fall = "rbxassetid://82496344168925",
+climb = "rbxassetid://100351052873247"
+}
+},
+{
+Name = "Mini",
+Animations = {
+idle = "rbxassetid://75265466060657",
+walk = "rbxassetid://85266386943404",
+run = "rbxassetid://103793784437513",
+jump = "rbxassetid://109948183274297",
+fall = "rbxassetid://93329007077659",
+climb = "rbxassetid://76437811057004"
+}
+},
+{
+Name = "Handstand",
+Animations = {
+idle = "rbxassetid://73956906322787",
+walk = "rbxassetid://82055796073914",
+run = "rbxassetid://139569292637224",
+jump = "rbxassetid://73779824944177",
+fall = "rbxassetid://85631336834768",
+climb = "rbxassetid://71656254569935"
+}
+},
+{
+Name = "Glitched",
+Animations = {
+idle = "rbxassetid://126196417995244",
+walk = "rbxassetid://130386190060750",
+run = "rbxassetid://134556940447986",
+jump = "rbxassetid://84897869753792",
+fall = "rbxassetid://82120293541058",
+climb = "rbxassetid://123198145682305"
+}
+}
+}
+
+local activePackIndex = nil
+local character
+local originalIds = {}
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "AnimationToggleGUI"
+gui.ResetOnSpawn = false
+gui.DisplayOrder = 9999
+gui.Parent = player:WaitForChild("PlayerGui")
+
+local openButton = Instance.new("TextButton")
+openButton.Size = UDim2.new(0, 24, 0, 24)
+openButton.Position = UDim2.new(0, 10, 0.5, -12)
+openButton.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+openButton.BackgroundTransparency = 0.2
+openButton.TextColor3 = Color3.new(1, 1, 1)
+openButton.Text = "+"
+openButton.TextSize = 14
+openButton.Font = Enum.Font.GothamMedium
+openButton.BorderSizePixel = 0
+openButton.ZIndex = 10
+openButton.Parent = gui
+
+local openCorner = Instance.new("UICorner")
+openCorner.CornerRadius = UDim.new(0, 4)
+openCorner.Parent = openButton
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 120, 0, 185)
+frame.Position = UDim2.new(0, 65, 0.5, -92)
+frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+frame.BackgroundTransparency = 0.18
+frame.BorderSizePixel = 0
+frame.Visible = false
+frame.ZIndex = 10
+frame.Parent = gui
+
+local frameCorner = Instance.new("UICorner")
+frameCorner.CornerRadius = UDim.new(0, 5)
+frameCorner.Parent = frame
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, -10, 0, 20)
+title.Position = UDim2.new(0, 5, 0, 2)
+title.BackgroundTransparency = 1
+title.Text = "ANIMATIONS"
+title.TextColor3 = Color3.new(1, 1, 1)
+title.TextSize = 10
+title.Font = Enum.Font.GothamMedium
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.ZIndex = 11
+title.Parent = frame
+
+local listContainer = Instance.new("Frame")
+listContainer.Size = UDim2.new(1, -8, 1, -24)
+listContainer.Position = UDim2.new(0, 4, 0, 22)
+listContainer.BackgroundTransparency = 1
+listContainer.ZIndex = 11
+listContainer.Parent = frame
+
+local listLayout = Instance.new("UIListLayout")
+listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+listLayout.Padding = UDim.new(0, 3)
+listLayout.Parent = listContainer
+
+local buttons = {}
+
+for index, pack in ipairs(AnimationPacks) do
+local row = Instance.new("Frame")
+row.Size = UDim2.new(1, 0, 0, 18)
+row.BackgroundTransparency = 1
+row.LayoutOrder = index
+row.ZIndex = 11
+row.Parent = listContainer
+
+local nameLabel = Instance.new("TextLabel")
+nameLabel.Size = UDim2.new(0.65, -2, 1, 0)
+nameLabel.Position = UDim2.new(0, 2, 0, 0)
+nameLabel.BackgroundTransparency = 1
+nameLabel.Text = pack.Name
+nameLabel.TextColor3 = Color3.fromRGB(235, 235, 235)
+nameLabel.TextSize = 9
+nameLabel.Font = Enum.Font.Gotham
+nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+nameLabel.ZIndex = 12
+nameLabel.Parent = row
+
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(0.35, -2, 1, 0)
+toggleBtn.Position = UDim2.new(0.65, 0, 0, 0)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
+toggleBtn.BackgroundTransparency = 0.15
+toggleBtn.TextColor3 = Color3.new(1, 1, 1)
+toggleBtn.Text = "OFF"
+toggleBtn.TextSize = 9
+toggleBtn.Font = Enum.Font.GothamMedium
+toggleBtn.BorderSizePixel = 0
+toggleBtn.ZIndex = 12
+toggleBtn.Parent = row
+
+local buttonCorner = Instance.new("UICorner")
+buttonCorner.CornerRadius = UDim.new(0, 4)
+buttonCorner.Parent = toggleBtn
+
+buttons[index] = toggleBtn
+end
+
+local dragging = false
+local dragStart
+local startPos
+
+local openDragging = false
+local openDragStart
+local openStartPos
+
+frame.InputBegan:Connect(function(input)
+if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+dragging = true
+dragStart = input.Position
+startPos = frame.Position
+end
+end)
+
+openButton.InputBegan:Connect(function(input)
+if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+openDragging = true
+openDragStart = input.Position
+openStartPos = openButton.Position
+end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+dragging = false
+openDragging = false
+end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+if dragging then
+local delta = input.Position - dragStart
+frame.Position = UDim2.new(
+startPos.X.Scale,
+startPos.X.Offset + delta.X,
+startPos.Y.Scale,
+startPos.Y.Offset + delta.Y
+)
+end
+if openDragging then
+local delta = input.Position - openDragStart
+openButton.Position = UDim2.new(
+openStartPos.X.Scale,
+openStartPos.X.Offset + delta.X,
+openStartPos.Y.Scale,
+openStartPos.Y.Offset + delta.Y
+)
+end
+end
+end)
+
+openButton.MouseButton1Click:Connect(function()
+frame.Visible = not frame.Visible
+openButton.Text = frame.Visible and "-" or "+"
+end)
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+if gameProcessed then return end
+if input.KeyCode == Enum.KeyCode.O then
+frame.Visible = not frame.Visible
+openButton.Text = frame.Visible and "-" or "+"
+if frame.Visible then
+frame.Position = UDim2.new(0, 65, 0.5, -92)
+openButton.Position = UDim2.new(0, 10, 0.5, -12)
+end
+end
+end)
+
+local function stopPlayingAnimations(hum)
+local animator = hum:FindFirstChildOfClass("Animator")
+if animator then
+for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+track:Stop()
+end
+end
+end
+
+local function applyAnimations(char, idTable)
+local hum = char:WaitForChild("Humanoid", 15)
+if not hum then return end
+
+local animate = char:WaitForChild("Animate", 15)
+if not animate then return end
+
+if not originalIds[char] then
+originalIds[char] = {}
+local keys = {"idle", "walk", "run", "jump", "fall", "climb", "swim"}
+for _, name in ipairs(keys) do
+local folder = animate:FindFirstChild(name)
+if folder then
+originalIds[char][name] = {}
+for _, anim in ipairs(folder:GetChildren()) do
+if anim:IsA("Animation") then
+originalIds[char][name][anim.Name] = anim.AnimationId
+end
+end
+end
+end
+end
+
+for name, id in pairs(idTable) do
+local folder = animate:FindFirstChild(name)
+if folder then
+for _, child in ipairs(folder:GetChildren()) do
+if child:IsA("Animation") then
+child:Destroy()
+end
+end
+local newAnim = Instance.new("Animation")
+newAnim.Name = "Animation1"
+newAnim.AnimationId = id
+newAnim.Parent = folder
+end
+end
+
+stopPlayingAnimations(hum)
+animate.Disabled = true
+task.wait(0.1)
+if animate and animate.Parent then
+animate.Disabled = false
+end
+end
+
+local function restoreAnimations(char)
+local hum = char:FindFirstChild("Humanoid")
+local animate = char:FindFirstChild("Animate")
+if animate and originalIds[char] then
+for name, animData in pairs(originalIds[char]) do
+local folder = animate:FindFirstChild(name)
+if folder then
+for _, child in ipairs(folder:GetChildren()) do
+if child:IsA("Animation") then
+child:Destroy()
+end
+end
+for animName, id in pairs(animData) do
+local newAnim = Instance.new("Animation")
+newAnim.Name = animName
+newAnim.AnimationId = id
+newAnim.Parent = folder
+end
+end
+end
+if hum then
+stopPlayingAnimations(hum)
+end
+animate.Disabled = true
+task.wait(0.1)
+if animate and animate.Parent then
+animate.Disabled = false
+end
+end
+end
+
+local function updateUI()
+for index, btn in ipairs(buttons) do
+if activePackIndex == index then
+btn.Text = "ON"
+btn.BackgroundColor3 = Color3.fromRGB(0, 150, 70)
+else
+btn.Text = "OFF"
+btn.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
+end
+end
+end
+
+for index, pack in ipairs(AnimationPacks) do
+local btn = buttons[index]
+btn.MouseButton1Click:Connect(function()
+if activePackIndex == index then
+activePackIndex = nil
+if character then
+restoreAnimations(character)
+end
+else
+activePackIndex = index
+if character then
+applyAnimations(character, pack.Animations)
+end
+end
+updateUI()
+end)
+end
+
+local function setupCharacter(char)
+character = char
+end
+
+if player.Character then
+setupCharacter(player.Character)
+end
+
+player.CharacterAdded:Connect(setupCharacter)
