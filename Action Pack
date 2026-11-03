@@ -39,8 +39,8 @@ fall = "rbxassetid://75379463314895"
 Name = "Iron Man",
 Animations = {
 idle = "rbxassetid://125628585679463",
-walk = "rbxassetid://105363522680733",
-run = "rbxassetid://130886352199041",
+walk = "rbxassetid://84782014405060",
+run = "rbxassetid://85232146719894",
 jump = "rbxassetid://132546756558556",
 fall = "rbxassetid://112252670940482",
 climb = "rbxassetid://124137036174350",
@@ -90,6 +90,17 @@ jump = "rbxassetid://84897869753792",
 fall = "rbxassetid://82120293541058",
 climb = "rbxassetid://123198145682305"
 }
+},
+{
+Name = "Big hand",
+Animations = {
+idle = "rbxassetid://137133894197794",
+walk = "rbxassetid://105089779938763",
+run = "rbxassetid://118717035822145",
+jump = "rbxassetid://134129814103626",
+fall = "rbxassetid://71316872059135",
+climb = "rbxassetid://119043313319726"
+}
 }
 }
 
@@ -121,8 +132,8 @@ openCorner.CornerRadius = UDim.new(0, 4)
 openCorner.Parent = openButton
 
 local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 120, 0, 185)
-frame.Position = UDim2.new(0, 65, 0.5, -92)
+frame.Size = UDim2.new(0, 120, 0, 210)
+frame.Position = UDim2.new(0, 65, 0.5, -105)
 frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 frame.BackgroundTransparency = 0.18
 frame.BorderSizePixel = 0
@@ -265,7 +276,7 @@ if input.KeyCode == Enum.KeyCode.O then
 frame.Visible = not frame.Visible
 openButton.Text = frame.Visible and "-" or "+"
 if frame.Visible then
-frame.Position = UDim2.new(0, 65, 0.5, -92)
+frame.Position = UDim2.new(0, 65, 0.5, -105)
 openButton.Position = UDim2.new(0, 10, 0.5, -12)
 end
 end
