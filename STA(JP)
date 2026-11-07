@@ -1,0 +1,2551 @@
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local LocalPlayer = Players.LocalPlayer
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Lighting = game:GetService("Lighting")
+local VirtualUser = game:GetService("VirtualUser")
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
+
+local Remotes = ReplicatedStorage:FindFirstChild("Remotes")
+
+local pickUpItemRemote = Remotes and Remotes:FindFirstChild("Interaction") and Remotes.Interaction:FindFirstChild("PickUpItem")
+local placeStructureRemote = Remotes and Remotes:FindFirstChild("Building") and Remotes.Building:FindFirstChild("PlaceStructure")
+local buyItemRemote = Remotes and Remotes:FindFirstChild("Merchant") and Remotes.Merchant:FindFirstChild("BuyItem")
+local addSuppressorRemote = Remotes and Remotes:FindFirstChild("Tools") and Remotes.Tools:FindFirstChild("AddSuppressor")
+local adjustBackpackRemote = Remotes and Remotes:FindFirstChild("Tools") and Remotes.Tools:FindFirstChild("AdjustBackpack")
+local resetRemote = Remotes and Remotes:FindFirstChild("Misc") and Remotes.Misc:FindFirstChild("Reset")
+
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/Library.lua"))()
+local ThemeManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/addons/ThemeManager.lua"))()
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/addons/SaveManager.lua"))()
+
+pcall(function()
+    if Library.ToggleKeybindFrame then
+        Library.ToggleKeybindFrame.Size = UDim2.new(0, 100, 0, 25)
+    end
+    if Library.UnloadButton then
+        Library.UnloadButton:Destroy()
+    end
+end)
+
+local Options = Library.Options
+local Toggles = Library.Toggles
+
+Library.ForceCheckbox = false
+Library.ShowToggleFrameInKeybinds = true
+
+local Window = Library:CreateWindow({
+    Title = "Baka Pote",
+    Footer = "Survive the Apocalypse",
+    NotifySide = "Right",
+    ShowCustomCursor = true,
+})
+
+local Tabs = {
+    Visuals = Window:AddTab("ビジュアル", "eye"),
+    Player = Window:AddTab("プレイヤー", "user"),
+    Combat = Window:AddTab("戦闘", "swords"),
+    Exploits = Window:AddTab("便利機能", "zap"),
+    Misc = Window:AddTab("その他", "settings"),
+    ["UI Settings"] = Window:AddTab("UI設定", "sliders-horizontal"),
+}
+
+local connections = {}
+local mobESPInstances = {}
+local playerESPInstances = {}
+local structureESPInstances = {}
+local antiAFKConn = nil
+local killAuraConn = nil
+local killAuraIndicatorLine = nil
+local killAuraIndicatorCircle = nil
+local repairAuraConn = nil
+local promptOriginalDurations = {}
+
+local originalValues = {
+    walkSpeed = nil,
+}
+
+local originalLighting = { stored = false }
+local originalFog = { stored = false }
+
+local mobOptions = { ESP = false, Chams = false, Name = true, Distance = true }
+local playerESPVars = { ESP = true, Chams = true, Name = true, Distance = true, Health = false }
+local structureESPVars = { ESP = false, Chams = false, Name = true, Distance = true }
+
+local mobNames = {"Runner", "Crawler", "Riot", "Zombie", "Brute", "Spitter", "Boss"}
+
+local espConfig = {
+    textSize = 8,
+    fillTransparency = 0.0,
+    outlineTransparency = 0.0,
+}
+
+local espDefinitions = {
+    {
+        key = "Gun",
+        displayName = "銃ESP",
+        icon = "crosshair",
+        items = {
+            "AA-12", "AK-47", "Assault Rifle", "Desert Eagle", "Double Barrel",
+            "Flamethrower", "Grenade Launcher", "LMG", "MediGun", "Pistol",
+            "Ray Gun", "Revolver", "Rifle", "Shotgun", "Sniper", "SVD", "Uzi"
+        },
+        colors = { fill = Color3.fromRGB(255, 30, 30), outline = Color3.fromRGB(255, 255, 255), text = Color3.fromRGB(255, 120, 120) },
+    },
+    {
+        key = "Melee",
+        displayName = "近接武器ESP",
+        icon = "swords",
+        items = {
+            "Bat", "Chainsaw", "Crowbar", "Fire Axe", "Hatchet", "Katana", "Knife",
+            "Riot Shield", "Scythe", "Sledgehammer", "Spear", "Spiked Bat"
+        },
+        colors = { fill = Color3.fromRGB(255, 140, 0), outline = Color3.fromRGB(255, 255, 255), text = Color3.fromRGB(255, 200, 100) },
+    },
+    {
+        key = "Medical",
+        displayName = "医療品ESP",
+        icon = "heart-pulse",
+        items = {
+            "Bandage", "Compound H", "Compound I", "Compound R", "Compound S", "Medkit"
+        },
+        colors = { fill = Color3.fromRGB(0, 255, 80), outline = Color3.fromRGB(255, 255, 255), text = Color3.fromRGB(150, 255, 150) },
+    },
+    {
+        key = "Armor",
+        displayName = "防具ESP",
+        icon = "shield",
+        items = {
+            "Power Armor", "Light Armor", "Medium Armor", "Heavy Armor"
+        },
+        colors = { fill = Color3.fromRGB(0, 100, 255), outline = Color3.fromRGB(255, 255, 255), text = Color3.fromRGB(160, 200, 255) },
+    },
+    {
+        key = "Food",
+        displayName = "食料ESP",
+        icon = "utensils",
+        items = {
+            "Chips", "Carrot", "Bloxiade", "Beans", "MRE", "Bloxy Cola"
+        },
+        colors = { fill = Color3.fromRGB(190, 255, 0), outline = Color3.fromRGB(255, 255, 255), text = Color3.fromRGB(210, 255, 150) },
+    },
+    {
+        key = "Resource",
+        displayName = "資源ESP",
+        icon = "box",
+        items = {
+            "AC", "Battery", "Battery Pack", "Bucket", "Dumbell", "Exhaust Pipe",
+            "Reactor Component", "Refined Metal", "Satellite Dish", "Scrap",
+            "Screws", "Spatula", "Tray", "TV", "Watch", "Zombie Heart"
+        },
+        colors = { fill = Color3.fromRGB(0, 220, 255), outline = Color3.fromRGB(255, 255, 255), text = Color3.fromRGB(180, 240, 255) },
+    },
+    {
+        key = "Fuel",
+        displayName = "燃料ESP",
+        icon = "zap",
+        items = { "Nuclear Fuel", "Refined Fuel", "Fuel" },
+        colors = { fill = Color3.fromRGB(255, 220, 0), outline = Color3.fromRGB(255, 255, 255), text = Color3.fromRGB(255, 240, 160) },
+    },
+    {
+        key = "Ability",
+        displayName = "アビリティESP",
+        icon = "zap-circle",
+        items = {
+            "Airstrike", "Attack Order", "Call of the Dead",
+            "Summon Brute", "Summon Zombies", "Taunt",
+            "The Future", "The Past", "The Present"
+        },
+        colors = { fill = Color3.fromRGB(180, 0, 255), outline = Color3.fromRGB(255, 255, 255), text = Color3.fromRGB(220, 150, 255) },
+    },
+}
+
+local espSystems = {}
+
+for _, def in ipairs(espDefinitions) do
+    local sys = {
+        key = def.key,
+        displayName = def.displayName,
+        colors = def.colors,
+        items = def.items,
+        itemList = {},
+        vars = { ESP = true, Chams = false, Name = true, Distance = true },
+        instances = {},
+        listenersSetup = false,
+    }
+    for _, name in ipairs(def.items) do
+        sys.itemList[name] = true
+    end
+    espSystems[def.key] = sys
+end
+
+local itemNames = {}
+local itemCategoryLookup = {}
+for _, def in ipairs(espDefinitions) do
+    for _, itemName in ipairs(def.items) do
+        table.insert(itemNames, itemName)
+        itemCategoryLookup[itemName] = def.key
+    end
+end
+
+local extraItemCategories = {
+    Ammo = { "Ammo Box", "Long Ammo", "Medium Ammo", "Pistol Ammo", "Shells" },
+    Structures = {
+        "Ammo Crate", "Barbed Wire", "Bear Trap", "Boost Pad", "Electric Fence",
+        "Farm Plot", "Fence", "Floodlight", "Gate", "Landmine", "Map",
+        "Repair Drone", "Shelf", "Teleporter", "Time Machine", "Turret",
+        "Wall", "Watchtower"
+    },
+    Consumables = { "Grenade", "Molotov" },
+    Backpacks = { "Basic Backpack", "Good Backpack", "Great Backpack" },
+    MiscItems = {
+        "Emerald", "Gas Mask", "Power Armor Arm", "Power Armor Core",
+        "Radio Tower Part", "Blueprint", "Military Keycard", "Repair Hammer", "Suppressor"
+    },
+}
+for catName, catItems in pairs(extraItemCategories) do
+    for _, itemName in ipairs(catItems) do
+        table.insert(itemNames, itemName)
+        itemCategoryLookup[itemName] = catName
+    end
+end
+table.sort(itemNames)
+
+local autoPickupCategories = {
+    Gun = true,
+    Melee = true,
+    Medical = true,
+    Armor = true,
+    Food = false,
+    Resource = true,
+    Fuel = true,
+    Ability = true,
+    Ammo = true,
+    Consumables = true,
+    Backpacks = true,
+    MiscItems = true,
+    Structures = false,
+}
+
+local structureNames = {
+    "Ammo Crate", "Barbed Wire", "Bear Trap", "Boost Pad", "Electric Fence",
+    "Farm Plot", "Fence", "Floodlight", "Gate", "Landmine", "Map", "Repair Drone",
+    "Shelf", "Teleporter", "Time Machine", "Turret", "Wall", "Watchtower"
+}
+
+local charactersFolder = nil
+local droppedItemsFolder = nil
+local structuresFolder = nil
+local mobListenersSetup = false
+local structureListenersSetup = false
+
+local function applyPromptDuration(prompt, isEnabled)
+    if not prompt:IsA("ProximityPrompt") then return end
+    if isEnabled then
+        if promptOriginalDurations[prompt] == nil then
+            promptOriginalDurations[prompt] = prompt.HoldDuration
+        end
+        prompt.HoldDuration = 0
+    elseif promptOriginalDurations[prompt] ~= nil then
+        prompt.HoldDuration = promptOriginalDurations[prompt]
+        promptOriginalDurations[prompt] = nil
+    end
+end
+
+local function updateInstantInteract(isEnabled)
+    if isEnabled then
+        for _, inst in ipairs(game:GetDescendants()) do
+            applyPromptDuration(inst, true)
+        end
+    else
+        for prompt, duration in pairs(promptOriginalDurations) do
+            if prompt.Parent then
+                prompt.HoldDuration = duration
+            end
+            promptOriginalDurations[prompt] = nil
+        end
+    end
+end
+
+local descendantAddedConn = game.DescendantAdded:Connect(function(inst)
+    if Toggles.InstantInteract and Toggles.InstantInteract.Value and inst:IsA("ProximityPrompt") then
+        task.defer(function()
+            if inst.Parent then
+                applyPromptDuration(inst, true)
+            end
+        end)
+    end
+end)
+table.insert(connections, descendantAddedConn)
+
+local function discoverFolders()
+    charactersFolder = Workspace:FindFirstChild("Characters")
+    droppedItemsFolder = Workspace:FindFirstChild("DroppedItems")
+    structuresFolder = Workspace:FindFirstChild("Structures")
+        or Workspace:FindFirstChild("PlayerStructures")
+        or Workspace:FindFirstChild("Buildings")
+end
+discoverFolders()
+
+local function getItemMainPart(item)
+    if item.PrimaryPart then return item.PrimaryPart end
+    for _, child in ipairs(item:GetChildren()) do
+        if child:IsA("BasePart") then
+            return child
+        end
+    end
+    return nil
+end
+
+local function getDistanceColor(dist)
+    if dist > 250 then return Color3.fromRGB(255, 80, 80)
+    elseif dist > 150 then return Color3.fromRGB(255, 180, 80)
+    elseif dist > 100 then return Color3.fromRGB(255, 255, 80)
+    else return Color3.fromRGB(220, 220, 220) end
+end
+
+local function getHealthColor(pct)
+    if pct > 0.6 then return Color3.fromRGB(80, 255, 80)
+    elseif pct > 0.3 then return Color3.fromRGB(255, 230, 50)
+    else return Color3.fromRGB(255, 60, 60) end
+end
+
+local function createHealthBar(parent, height, width, position)
+    local bg = Instance.new("Frame")
+    bg.Name = "HealthBarBG"
+    bg.Size = UDim2.new(width, 0, height, 0)
+    bg.Position = position
+    bg.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    bg.BackgroundTransparency = 0.2
+    bg.BorderSizePixel = 0
+    bg.Parent = parent
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 3)
+    corner.Parent = bg
+
+    local fill = Instance.new("Frame")
+    fill.Name = "HealthBarFill"
+    fill.Size = UDim2.new(1, 0, 1, 0)
+    fill.BackgroundColor3 = Color3.fromRGB(80, 255, 80)
+    fill.BorderSizePixel = 0
+    fill.Parent = bg
+
+    local fillCorner = Instance.new("UICorner")
+    fillCorner.CornerRadius = UDim.new(0, 3)
+    fillCorner.Parent = fill
+
+    return bg, fill
+end
+
+local function updateHealthBar(fill, pct, color)
+    fill.Size = UDim2.new(math.clamp(pct, 0, 1), 0, 1, 0)
+    fill.BackgroundColor3 = color
+end
+
+local function createTextBG(parent, size, position)
+    local bg = Instance.new("Frame")
+    bg.Name = "TextBG"
+    bg.Size = size
+    bg.Position = position
+    bg.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    bg.BackgroundTransparency = 0.5
+    bg.BorderSizePixel = 0
+    bg.ZIndex = -1
+    bg.Parent = parent
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 4)
+    corner.Parent = bg
+    return bg
+end
+
+local MOB_RED = { fill = Color3.fromRGB(255, 30, 30), outline = Color3.fromRGB(255, 120, 120) }
+local mobTypeColors = {
+    Zombie = MOB_RED, Runner = MOB_RED, Crawler = MOB_RED,
+    Brute = MOB_RED, Spitter = MOB_RED, Riot = MOB_RED, Boss = MOB_RED,
+}
+
+local function createCategoryESP(sys, item)
+    if not item:IsA("Model") then return end
+    if sys.instances[item] then return end
+
+    local mainPart = getItemMainPart(item)
+    if not mainPart then return end
+
+    local espTable = { MainPart = mainPart }
+
+    if sys.vars.Chams then
+        local highlight = Instance.new("Highlight")
+        highlight.Name = sys.key .. "ESP_Highlight"
+        highlight.Adornee = item
+        highlight.FillColor = sys.colors.fill
+        highlight.FillTransparency = espConfig.fillTransparency
+        highlight.OutlineColor = sys.colors.outline
+        highlight.OutlineTransparency = espConfig.outlineTransparency
+        highlight.Parent = item
+        espTable.Highlight = highlight
+    end
+
+    if sys.vars.Name or sys.vars.Distance then
+        local billboard = Instance.new("BillboardGui")
+        billboard.Name = sys.key .. "ESP_NameDistance"
+        billboard.Adornee = mainPart
+        billboard.Size = UDim2.new(0, 220, 0, 50)
+        billboard.StudsOffset = Vector3.new(0, 2, 0)
+        billboard.AlwaysOnTop = true
+        billboard.Parent = item
+
+        local frame = Instance.new("Frame")
+        frame.Size = UDim2.new(1, 0, 1, 0)
+        frame.BackgroundTransparency = 1
+        frame.Parent = billboard
+
+        local nameLabel = Instance.new("TextLabel")
+        nameLabel.Name = "NameLabel"
+        nameLabel.Size = UDim2.new(1, 0, 0.5, 0)
+        nameLabel.Position = UDim2.new(0, 0, 0, 0)
+        nameLabel.BackgroundTransparency = 1
+        nameLabel.Text = "[" .. sys.key .. "] " .. item.Name
+        nameLabel.TextColor3 = sys.colors.text
+        nameLabel.TextStrokeTransparency = 0.2
+        nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        nameLabel.Font = Enum.Font.GothamBold
+        nameLabel.TextSize = espConfig.textSize
+        nameLabel.Visible = sys.vars.Name
+        nameLabel.Parent = frame
+
+        local distLabel = Instance.new("TextLabel")
+        distLabel.Name = "DistLabel"
+        distLabel.Size = UDim2.new(1, 0, 0.5, 0)
+        distLabel.Position = UDim2.new(0, 0, 0.5, 0)
+        distLabel.BackgroundTransparency = 1
+        distLabel.Text = "0m"
+        distLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+        distLabel.TextStrokeTransparency = 0.2
+        distLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        distLabel.Font = Enum.Font.GothamBold
+        distLabel.TextSize = math.max(espConfig.textSize - 2, 8)
+        distLabel.Visible = sys.vars.Distance
+        distLabel.Parent = frame
+
+        espTable.Billboard = billboard
+        espTable.NameLabel = nameLabel
+        espTable.DistLabel = distLabel
+    end
+
+    local connection
+    connection = RunService.Heartbeat:Connect(function()
+        if not item or not item.Parent then
+            connection:Disconnect()
+            return
+        end
+        local myChar = LocalPlayer.Character
+        local myRoot = myChar and (myChar:FindFirstChild("HumanoidRootPart") or myChar:FindFirstChild("Torso") or myChar:FindFirstChild("UpperTorso"))
+        if not myRoot then return end
+        local dist = (myRoot.Position - mainPart.Position).Magnitude
+        local maxDist = Options and Options.ESPMaxDistance and Options.ESPMaxDistance.Value or 99999
+        local visible = dist <= maxDist
+        if sys.vars.Chams and (not espTable.Highlight or not espTable.Highlight.Parent) then
+            local h = Instance.new("Highlight")
+            h.Name = sys.key .. "ESP_Highlight"
+            h.Adornee = item
+            h.FillColor = sys.colors.fill
+            h.FillTransparency = espConfig.fillTransparency
+            h.OutlineColor = sys.colors.outline
+            h.OutlineTransparency = espConfig.outlineTransparency
+            h.Enabled = visible
+            h.Parent = item
+            espTable.Highlight = h
+        elseif espTable.Highlight and espTable.Highlight.Parent then
+            espTable.Highlight.Enabled = visible
+        end
+        if espTable.Billboard and espTable.Billboard.Parent then
+            espTable.Billboard.Enabled = visible
+            if espTable.DistLabel and sys.vars.Distance then
+                espTable.DistLabel.Text = math.floor(dist) .. "m"
+                espTable.DistLabel.TextColor3 = getDistanceColor(dist)
+            end
+        end
+    end)
+    espTable.DistanceConnection = connection
+
+    sys.instances[item] = espTable
+end
+
+local function removeCategoryESP(sys, item)
+    local esp = sys.instances[item]
+    if esp then
+        if esp.Highlight then esp.Highlight:Destroy() end
+        if esp.Billboard then esp.Billboard:Destroy() end
+        if esp.DistanceConnection then esp.DistanceConnection:Disconnect() end
+        sys.instances[item] = nil
+    end
+end
+
+local function refreshCategoryESP(sys)
+    for item, _ in pairs(sys.instances) do
+        removeCategoryESP(sys, item)
+    end
+    if not sys.vars.ESP then return end
+    if not droppedItemsFolder then return end
+    for _, child in ipairs(droppedItemsFolder:GetChildren()) do
+        if sys.itemList[child.Name] then
+            createCategoryESP(sys, child)
+        end
+    end
+end
+
+local function setupCategoryListeners(sys)
+    if not droppedItemsFolder or sys.listenersSetup then return end
+    sys.listenersSetup = true
+    local addedConn = droppedItemsFolder.ChildAdded:Connect(function(child)
+        if sys.vars.ESP and sys.itemList[child.Name] then
+            task.wait(0.2)
+            createCategoryESP(sys, child)
+        end
+    end)
+    table.insert(connections, addedConn)
+    local removedConn = droppedItemsFolder.ChildRemoved:Connect(function(child)
+        removeCategoryESP(sys, child)
+    end)
+    table.insert(connections, removedConn)
+end
+
+for _, sys in pairs(espSystems) do
+    sys.create = function(item) createCategoryESP(sys, item) end
+    sys.remove = function(item) removeCategoryESP(sys, item) end
+    sys.refresh = function() refreshCategoryESP(sys) end
+    sys.setupListeners = function() setupCategoryListeners(sys) end
+end
+
+local function removeMobESP(char)
+    local esp = mobESPInstances[char]
+    if esp then
+        if esp.Highlight then esp.Highlight:Destroy() end
+        if esp.Billboard then esp.Billboard:Destroy() end
+        if esp.DistanceConnection then esp.DistanceConnection:Disconnect() end
+        mobESPInstances[char] = nil
+    end
+end
+
+local function createMobESP(char)
+    if not char:IsA("Model") then return end
+    if mobESPInstances[char] then return end
+
+    local root = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso")
+    if not root then return end
+
+    local espTable = { Root = root }
+    local mobColors = mobTypeColors[char.Name] or {fill = Color3.fromRGB(220, 0, 0), outline = Color3.fromRGB(255, 185, 185)}
+
+    if mobOptions.Chams then
+        local highlight = Instance.new("Highlight")
+        highlight.Name = "MobESP_Highlight"
+        highlight.Adornee = char
+        highlight.FillColor = mobColors.fill
+        highlight.FillTransparency = espConfig.fillTransparency
+        highlight.OutlineColor = mobColors.outline
+        highlight.OutlineTransparency = espConfig.outlineTransparency
+        highlight.Parent = char
+        espTable.Highlight = highlight
+    end
+
+    local billboard, nameLabel, distLabel
+    if mobOptions.Name or mobOptions.Distance then
+        billboard = Instance.new("BillboardGui")
+        billboard.Name = "MobESP_NameDistance"
+        billboard.Adornee = root
+        billboard.Size = UDim2.new(0, 220, 0, 50)
+        billboard.StudsOffset = Vector3.new(0, 3, 0)
+        billboard.AlwaysOnTop = true
+        billboard.Parent = char
+
+        local frame = Instance.new("Frame")
+        frame.Size = UDim2.new(1, 0, 1, 0)
+        frame.BackgroundTransparency = 1
+        frame.Parent = billboard
+
+        nameLabel = Instance.new("TextLabel")
+        nameLabel.Name = "NameLabel"
+        nameLabel.Size = UDim2.new(1, 0, 0.5, 0)
+        nameLabel.Position = UDim2.new(0, 0, 0, 0)
+        nameLabel.BackgroundTransparency = 1
+        nameLabel.Text = char.Name
+        nameLabel.TextColor3 = mobColors.outline
+        nameLabel.TextStrokeTransparency = 0.2
+        nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        nameLabel.Font = Enum.Font.GothamBold
+        nameLabel.TextSize = espConfig.textSize
+        nameLabel.Visible = mobOptions.Name
+        nameLabel.Parent = frame
+
+        distLabel = Instance.new("TextLabel")
+        distLabel.Name = "DistLabel"
+        distLabel.Size = UDim2.new(1, 0, 0.5, 0)
+        distLabel.Position = UDim2.new(0, 0, 0.5, 0)
+        distLabel.BackgroundTransparency = 1
+        distLabel.Text = "0m"
+        distLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+        distLabel.TextStrokeTransparency = 0.2
+        distLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        distLabel.Font = Enum.Font.GothamBold
+        distLabel.TextSize = math.max(espConfig.textSize - 2, 8)
+        distLabel.Visible = mobOptions.Distance
+        distLabel.Parent = frame
+
+        espTable.Billboard = billboard
+        espTable.NameLabel = nameLabel
+        espTable.DistLabel = distLabel
+    end
+
+    local connection
+    connection = RunService.Heartbeat:Connect(function()
+        if not char or not char.Parent then
+            connection:Disconnect()
+            return
+        end
+        local myChar = LocalPlayer.Character
+        local myRoot = myChar and (myChar:FindFirstChild("HumanoidRootPart") or myChar:FindFirstChild("Torso") or myChar:FindFirstChild("UpperTorso"))
+        if not myRoot then return end
+        local dist = (myRoot.Position - root.Position).Magnitude
+        local maxDist = Options and Options.ESPMaxDistance and Options.ESPMaxDistance.Value or 99999
+        local visible = dist <= maxDist
+        local mc = mobTypeColors[char.Name] or {fill = Color3.fromRGB(220, 0, 0), outline = Color3.fromRGB(255, 185, 185)}
+        if mobOptions.Chams and (not espTable.Highlight or not espTable.Highlight.Parent) then
+            local h = Instance.new("Highlight")
+            h.Name = "MobESP_Highlight"
+            h.Adornee = char
+            h.FillColor = mc.fill
+            h.FillTransparency = espConfig.fillTransparency
+            h.OutlineColor = mc.outline
+            h.OutlineTransparency = espConfig.outlineTransparency
+            h.Enabled = visible
+            h.Parent = char
+            espTable.Highlight = h
+        elseif espTable.Highlight and espTable.Highlight.Parent then
+            espTable.Highlight.Enabled = visible
+        end
+        if billboard and billboard.Parent then
+            billboard.Enabled = visible
+            if nameLabel and mobOptions.Name then
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                if hum then
+                    nameLabel.Text = char.Name .. " [" .. math.floor(hum.Health) .. "/" .. math.floor(hum.MaxHealth) .. "]"
+                end
+            end
+            if distLabel and mobOptions.Distance then
+                distLabel.Text = math.floor(dist) .. "m"
+                distLabel.TextColor3 = getDistanceColor(dist)
+            end
+        end
+    end)
+    espTable.DistanceConnection = connection
+    table.insert(connections, connection)
+
+    mobESPInstances[char] = espTable
+end
+
+local function refreshMobESP()
+    for char, _ in pairs(mobESPInstances) do
+        removeMobESP(char)
+    end
+    if not mobOptions.ESP then return end
+    if not charactersFolder then return end
+    local playerCharSet = {}
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p.Character then playerCharSet[p.Character] = true end
+    end
+    for _, child in ipairs(charactersFolder:GetChildren()) do
+        if child:IsA("Model") and not playerCharSet[child] then
+            createMobESP(child)
+        end
+    end
+end
+
+local function removeStructureESP(structure)
+    local esp = structureESPInstances[structure]
+    if esp then
+        if esp.Highlight then esp.Highlight:Destroy() end
+        if esp.Billboard then esp.Billboard:Destroy() end
+        if esp.DistanceConnection then esp.DistanceConnection:Disconnect() end
+        structureESPInstances[structure] = nil
+    end
+end
+
+local function createStructureESP(structure)
+    if not structure:IsA("Model") then return end
+    if structureESPInstances[structure] then return end
+
+    local mainPart = structure.PrimaryPart or getItemMainPart(structure)
+    if not mainPart then return end
+
+    local espTable = { MainPart = mainPart }
+
+    if structureESPVars.Chams then
+        local highlight = Instance.new("Highlight")
+        highlight.Name = "StructESP_Highlight"
+        highlight.Adornee = structure
+        highlight.FillColor = Color3.fromRGB(0, 200, 150)
+        highlight.FillTransparency = espConfig.fillTransparency
+        highlight.OutlineColor = Color3.fromRGB(100, 255, 200)
+        highlight.OutlineTransparency = espConfig.outlineTransparency
+        highlight.Parent = structure
+        espTable.Highlight = highlight
+    end
+
+    local billboard, nameLabel, distLabel
+    if structureESPVars.Name or structureESPVars.Distance then
+        billboard = Instance.new("BillboardGui")
+        billboard.Name = "StructESP_Info"
+        billboard.Adornee = mainPart
+        billboard.Size = UDim2.new(0, 250, 0, 50)
+        billboard.StudsOffset = Vector3.new(0, 3, 0)
+        billboard.AlwaysOnTop = true
+        billboard.Parent = structure
+
+        local frame = Instance.new("Frame")
+        frame.Size = UDim2.new(1, 0, 1, 0)
+        frame.BackgroundTransparency = 1
+        frame.Parent = billboard
+
+        nameLabel = Instance.new("TextLabel")
+        nameLabel.Name = "NameLabel"
+        nameLabel.Size = UDim2.new(1, 0, 0.5, 0)
+        nameLabel.Position = UDim2.new(0, 0, 0, 0)
+        nameLabel.BackgroundTransparency = 1
+        nameLabel.Text = "[構造物] " .. structure.Name
+        nameLabel.TextColor3 = Color3.fromRGB(0, 255, 200)
+        nameLabel.TextStrokeTransparency = 0.2
+        nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        nameLabel.Font = Enum.Font.GothamBold
+        nameLabel.TextSize = espConfig.textSize
+        nameLabel.Visible = structureESPVars.Name
+        nameLabel.Parent = frame
+
+        distLabel = Instance.new("TextLabel")
+        distLabel.Name = "DistLabel"
+        distLabel.Size = UDim2.new(1, 0, 0.5, 0)
+        distLabel.Position = UDim2.new(0, 0, 0.5, 0)
+        distLabel.BackgroundTransparency = 1
+        distLabel.Text = "0m"
+        distLabel.TextColor3 = Color3.fromRGB(200, 220, 220)
+        distLabel.TextStrokeTransparency = 0.2
+        distLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        distLabel.Font = Enum.Font.GothamBold
+        distLabel.TextSize = math.max(espConfig.textSize - 2, 8)
+        distLabel.Visible = structureESPVars.Distance
+        distLabel.Parent = frame
+
+        espTable.Billboard = billboard
+        espTable.NameLabel = nameLabel
+        espTable.DistLabel = distLabel
+    end
+
+    local connection
+    connection = RunService.Heartbeat:Connect(function()
+        if not structure or not structure.Parent then
+            connection:Disconnect()
+            return
+        end
+        local myChar = LocalPlayer.Character
+        local myRoot = myChar and (myChar:FindFirstChild("HumanoidRootPart") or myChar:FindFirstChild("Torso") or myChar:FindFirstChild("UpperTorso"))
+        if not myRoot then return end
+        local dist = (myRoot.Position - mainPart.Position).Magnitude
+        local maxDist = Options and Options.ESPMaxDistance and Options.ESPMaxDistance.Value or 99999
+        local visible = dist <= maxDist
+        if structureESPVars.Chams and (not espTable.Highlight or not espTable.Highlight.Parent) then
+            local h = Instance.new("Highlight")
+            h.Name = "StructESP_Highlight"
+            h.Adornee = structure
+            h.FillColor = Color3.fromRGB(0, 200, 150)
+            h.FillTransparency = espConfig.fillTransparency
+            h.OutlineColor = Color3.fromRGB(100, 255, 200)
+            h.OutlineTransparency = espConfig.outlineTransparency
+            h.Enabled = visible
+            h.Parent = structure
+            espTable.Highlight = h
+        elseif espTable.Highlight and espTable.Highlight.Parent then
+            espTable.Highlight.Enabled = visible
+        end
+        if billboard and billboard.Parent then
+            billboard.Enabled = visible
+            if distLabel and structureESPVars.Distance then
+                distLabel.Text = math.floor(dist) .. "m"
+                distLabel.TextColor3 = getDistanceColor(dist)
+            end
+        end
+    end)
+    espTable.DistanceConnection = connection
+    table.insert(connections, connection)
+
+    structureESPInstances[structure] = espTable
+end
+
+local function refreshStructureESP()
+    for structure, _ in pairs(structureESPInstances) do
+        removeStructureESP(structure)
+    end
+    if not structureESPVars.ESP then return end
+    if not structuresFolder then return end
+    for _, child in ipairs(structuresFolder:GetDescendants()) do
+        if child:IsA("Model") and table.find(structureNames, child.Name) then
+            createStructureESP(child)
+        end
+    end
+end
+
+local function removePlayerESP(player)
+    local esp = playerESPInstances[player]
+    if esp then
+        if esp.Highlight then esp.Highlight:Destroy() end
+        if esp.Billboard then esp.Billboard:Destroy() end
+        if esp.DistanceConnection then esp.DistanceConnection:Disconnect() end
+        if esp.CharAddedConn then esp.CharAddedConn:Disconnect() end
+        playerESPInstances[player] = nil
+    end
+end
+
+local function createPlayerESP(player)
+    if player == LocalPlayer then return end
+    if playerESPInstances[player] then return end
+
+    local char = player.Character
+    if not char then return end
+
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+
+    local espTable = {}
+
+    if playerESPVars.Chams then
+        local highlight = Instance.new("Highlight")
+        highlight.Name = "PlayerESP_Highlight"
+        highlight.Adornee = char
+        highlight.FillColor = Color3.fromRGB(0, 100, 255)
+        highlight.FillTransparency = espConfig.fillTransparency
+        highlight.OutlineColor = Color3.fromRGB(100, 180, 255)
+        highlight.OutlineTransparency = espConfig.outlineTransparency
+        highlight.Parent = char
+        espTable.Highlight = highlight
+    end
+
+    local billboard, nameLabel, toolLabel, healthLabel, distLabel
+    if playerESPVars.Name or playerESPVars.Distance or playerESPVars.Health then
+        billboard = Instance.new("BillboardGui")
+        billboard.Name = "PlayerESP_Info"
+        billboard.Adornee = root
+        billboard.Size = UDim2.new(0, 220, 0, 70)
+        billboard.StudsOffset = Vector3.new(0, 3, 0)
+        billboard.AlwaysOnTop = true
+        billboard.Parent = char
+
+        local frame = Instance.new("Frame")
+        frame.Size = UDim2.new(1, 0, 1, 0)
+        frame.BackgroundTransparency = 1
+        frame.Parent = billboard
+
+        nameLabel = Instance.new("TextLabel")
+        nameLabel.Name = "NameLabel"
+        nameLabel.Size = UDim2.new(1, 0, 0.3, 0)
+        nameLabel.Position = UDim2.new(0, 0, 0, 0)
+        nameLabel.BackgroundTransparency = 1
+        nameLabel.Text = player.DisplayName .. " (@" .. player.Name .. ")"
+        nameLabel.TextColor3 = Color3.fromRGB(150, 200, 255)
+        nameLabel.TextStrokeTransparency = 0.2
+        nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        nameLabel.Font = Enum.Font.GothamBold
+        nameLabel.TextSize = espConfig.textSize
+        nameLabel.Visible = playerESPVars.Name
+        nameLabel.Parent = frame
+
+        toolLabel = Instance.new("TextLabel")
+        toolLabel.Name = "ToolLabel"
+        toolLabel.Size = UDim2.new(1, 0, 0.25, 0)
+        toolLabel.Position = UDim2.new(0, 0, 0.3, 0)
+        toolLabel.BackgroundTransparency = 1
+        toolLabel.Text = ""
+        toolLabel.TextColor3 = Color3.fromRGB(180, 180, 255)
+        toolLabel.TextStrokeTransparency = 0.2
+        toolLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        toolLabel.Font = Enum.Font.Gotham
+        toolLabel.TextSize = math.max(espConfig.textSize - 2, 8)
+        toolLabel.Visible = playerESPVars.Name
+        toolLabel.Parent = frame
+
+        healthLabel = Instance.new("TextLabel")
+        healthLabel.Name = "HealthLabel"
+        healthLabel.Size = UDim2.new(1, 0, 0.2, 0)
+        healthLabel.Position = UDim2.new(0, 0, 0.55, 0)
+        healthLabel.BackgroundTransparency = 1
+        healthLabel.Text = "100 HP"
+        healthLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+        healthLabel.TextStrokeTransparency = 0.2
+        healthLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        healthLabel.Font = Enum.Font.GothamBold
+        healthLabel.TextSize = math.max(espConfig.textSize - 2, 8)
+        healthLabel.Visible = playerESPVars.Health
+        healthLabel.Parent = frame
+
+        distLabel = Instance.new("TextLabel")
+        distLabel.Name = "DistLabel"
+        distLabel.Size = UDim2.new(1, 0, 0.2, 0)
+        distLabel.Position = UDim2.new(0, 0, 0.78, 0)
+        distLabel.BackgroundTransparency = 1
+        distLabel.Text = "0m"
+        distLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+        distLabel.TextStrokeTransparency = 0.2
+        distLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        distLabel.Font = Enum.Font.GothamBold
+        distLabel.TextSize = math.max(espConfig.textSize - 2, 8)
+        distLabel.Visible = playerESPVars.Distance
+        distLabel.Parent = frame
+
+        espTable.Billboard = billboard
+        espTable.NameLabel = nameLabel
+        espTable.ToolLabel = toolLabel
+        espTable.HealthLabel = healthLabel
+        espTable.DistLabel = distLabel
+    end
+
+    local connection
+    connection = RunService.Heartbeat:Connect(function()
+        if not player or not player.Parent then
+            connection:Disconnect()
+            return
+        end
+        local c = player.Character
+        if not c or not c.Parent then return end
+        local r = c:FindFirstChild("HumanoidRootPart")
+        if not r then return end
+
+        local myChar = LocalPlayer.Character
+        local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+        if not myRoot then return end
+        local dist = (myRoot.Position - r.Position).Magnitude
+        local maxDist = Options and Options.ESPMaxDistance and Options.ESPMaxDistance.Value or 99999
+        local visible = dist <= maxDist
+
+        if playerESPVars.Chams and (not espTable.Highlight or not espTable.Highlight.Parent) then
+            local h = Instance.new("Highlight")
+            h.Name = "PlayerESP_Highlight"
+            h.Adornee = c
+            h.FillColor = Color3.fromRGB(0, 100, 255)
+            h.FillTransparency = espConfig.fillTransparency
+            h.OutlineColor = Color3.fromRGB(100, 180, 255)
+            h.OutlineTransparency = espConfig.outlineTransparency
+            h.Parent = c
+            espTable.Highlight = h
+        elseif espTable.Highlight and espTable.Highlight.Parent then
+            espTable.Highlight.Enabled = visible
+        end
+
+        if billboard and billboard.Parent then
+            billboard.Enabled = visible
+            if toolLabel and playerESPVars.Name then
+                local tool = c:FindFirstChildOfClass("Tool")
+                toolLabel.Text = tool and ("[ " .. tool.Name .. " ]") or ""
+            end
+            if healthLabel and playerESPVars.Health then
+                local humanoid = c:FindFirstChildOfClass("Humanoid")
+                if humanoid then
+                    healthLabel.Text = math.floor(humanoid.Health) .. " HP"
+                    healthLabel.TextColor3 = getHealthColor(humanoid.Health / humanoid.MaxHealth)
+                end
+            end
+            if distLabel and playerESPVars.Distance then
+                distLabel.Text = math.floor(dist) .. "m"
+                distLabel.TextColor3 = getDistanceColor(dist)
+            end
+        end
+    end)
+    espTable.DistanceConnection = connection
+    table.insert(connections, connection)
+
+    local charAddedConn = player.CharacterAdded:Connect(function()
+        if playerESPVars.ESP then
+            task.wait(1)
+            removePlayerESP(player)
+            createPlayerESP(player)
+        end
+    end)
+    espTable.CharAddedConn = charAddedConn
+    table.insert(connections, charAddedConn)
+
+    playerESPInstances[player] = espTable
+end
+
+local function refreshPlayerESP()
+    for player, _ in pairs(playerESPInstances) do
+        removePlayerESP(player)
+    end
+    if not playerESPVars.ESP then return end
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            if player.Character then
+                createPlayerESP(player)
+            else
+                local conn = player.CharacterAdded:Connect(function()
+                    conn:Disconnect()
+                    if playerESPVars.ESP then
+                        task.wait(1)
+                        createPlayerESP(player)
+                    end
+                end)
+                table.insert(connections, conn)
+            end
+        end
+    end
+end
+
+local function setupMobListeners()
+    if not charactersFolder or mobListenersSetup then return end
+    mobListenersSetup = true
+    local childAddedConn = charactersFolder.ChildAdded:Connect(function(child)
+        if mobOptions.ESP and child:IsA("Model") then
+            local playerCharSet = {}
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p.Character then playerCharSet[p.Character] = true end
+            end
+            if not playerCharSet[child] then
+                task.wait(0.2)
+                createMobESP(child)
+            end
+        end
+    end)
+    table.insert(connections, childAddedConn)
+
+    local childRemovedConn = charactersFolder.ChildRemoved:Connect(function(child)
+        removeMobESP(child)
+    end)
+    table.insert(connections, childRemovedConn)
+end
+
+local function setupStructureListeners()
+    if not structuresFolder or structureListenersSetup then return end
+    structureListenersSetup = true
+    local descendantAddedConn = structuresFolder.DescendantAdded:Connect(function(child)
+        if structureESPVars.ESP and child:IsA("Model") and table.find(structureNames, child.Name) then
+            task.wait(0.2)
+            createStructureESP(child)
+        end
+    end)
+    table.insert(connections, descendantAddedConn)
+
+    local descendantRemovingConn = structuresFolder.DescendantRemoving:Connect(function(child)
+        removeStructureESP(child)
+    end)
+    table.insert(connections, descendantRemovingConn)
+end
+
+task.spawn(function()
+    while not Library.Unloaded do
+        discoverFolders()
+        if charactersFolder then
+            refreshMobESP()
+            if not mobListenersSetup then setupMobListeners() end
+        end
+        if droppedItemsFolder then
+            for _, sys in pairs(espSystems) do
+                sys.refresh()
+            end
+            for _, sys in pairs(espSystems) do
+                if not sys.listenersSetup then sys.setupListeners() end
+            end
+        end
+        if structuresFolder then
+            refreshStructureESP()
+            if not structureListenersSetup then setupStructureListeners() end
+        end
+        task.wait(5)
+    end
+end)
+
+for _, sys in pairs(espSystems) do
+    setupCategoryListeners(sys)
+end
+setupMobListeners()
+setupStructureListeners()
+
+local speedHackConn = RunService.Stepped:Connect(function()
+    if not Toggles.SpeedHack or not Toggles.SpeedHack.Value then return end
+    local char = LocalPlayer.Character
+    if not char then return end
+    local humanoid = char:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        local targetSpeed = Options and Options.SpeedValue and Options.SpeedValue.Value or 31
+        humanoid.WalkSpeed = targetSpeed
+    end
+end)
+table.insert(connections, speedHackConn)
+
+local noclipLastCFrame = nil
+
+local noclipConn = RunService.Heartbeat:Connect(function()
+    if not Toggles.NoClip or not Toggles.NoClip.Value then
+        noclipLastCFrame = nil
+        return
+    end
+    local char = LocalPlayer.Character
+    if not char then noclipLastCFrame = nil return end
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not root then noclipLastCFrame = nil return end
+
+    local currentCF = root.CFrame
+    if noclipLastCFrame then
+        local delta = (currentCF.Position - noclipLastCFrame.Position).Magnitude
+        if delta > 8 then
+            root.CFrame = noclipLastCFrame
+            currentCF = noclipLastCFrame
+        end
+    end
+    noclipLastCFrame = currentCF
+
+    for _, part in ipairs(char:GetDescendants()) do
+        if part:IsA("BasePart") and part.CanCollide then
+            part.CanCollide = false
+        end
+    end
+end)
+table.insert(connections, noclipConn)
+
+local function enableFullbright()
+    if not originalLighting.stored then
+        originalLighting.Brightness = Lighting.Brightness
+        originalLighting.Ambient = Lighting.Ambient
+        originalLighting.OutdoorAmbient = Lighting.OutdoorAmbient
+        originalLighting.ClockTime = Lighting.ClockTime
+        originalLighting.FogEnd = Lighting.FogEnd
+        originalLighting.FogStart = Lighting.FogStart
+        originalLighting.GlobalShadows = Lighting.GlobalShadows
+        originalLighting.stored = true
+    end
+
+    Lighting.Brightness = 2
+    Lighting.Ambient = Color3.fromRGB(178, 178, 178)
+    Lighting.OutdoorAmbient = Color3.fromRGB(178, 178, 178)
+    Lighting.ClockTime = 14
+    Lighting.FogEnd = 100000
+    Lighting.FogStart = 0
+    Lighting.GlobalShadows = false
+end
+
+local function disableFullbright()
+    if originalLighting.stored then
+        Lighting.Brightness = originalLighting.Brightness
+        Lighting.Ambient = originalLighting.Ambient
+        Lighting.OutdoorAmbient = originalLighting.OutdoorAmbient
+        Lighting.ClockTime = originalLighting.ClockTime
+        Lighting.FogEnd = originalLighting.FogEnd
+        Lighting.FogStart = originalLighting.FogStart
+        Lighting.GlobalShadows = originalLighting.GlobalShadows
+    end
+end
+
+local stopAntiAFK
+
+local function startAntiAFK()
+    stopAntiAFK()
+    antiAFKConn = LocalPlayer.Idled:Connect(function()
+        VirtualUser:CaptureController()
+        VirtualUser:ClickButton2(Vector2.new())
+    end)
+    table.insert(connections, antiAFKConn)
+end
+
+stopAntiAFK = function()
+    if antiAFKConn then
+        antiAFKConn:Disconnect()
+        antiAFKConn = nil
+    end
+end
+
+local killAuraLastSwing = 0
+local killAuraCurrentTarget = nil
+local killAuraTargetDistance = nil
+
+local weaponSwingSpeeds = {
+    ["Knife"] = 0.25,
+    ["Katana"] = 0.3,
+    ["Crowbar"] = 0.35,
+    ["Bat"] = 0.45,
+    ["Spiked Bat"] = 0.45,
+    ["Hatchet"] = 0.4,
+    ["Scythe"] = 0.4,
+    ["Spear"] = 0.4,
+    ["Fire Axe"] = 0.55,
+    ["Sledgehammer"] = 0.6,
+    ["Chainsaw"] = 0.35,
+    ["Riot Shield"] = 0.5,
+}
+
+local function getWeaponSwingSpeed()
+    local char = LocalPlayer.Character
+    if not char then return 0.5 end
+    
+    local tool = char:FindFirstChildOfClass("Tool")
+    if not tool then return 0.5 end
+    
+    local toolName = tool.Name
+    
+    if weaponSwingSpeeds[toolName] then
+        return weaponSwingSpeeds[toolName]
+    end
+    
+    for weaponName, speed in pairs(weaponSwingSpeeds) do
+        if string.find(toolName:lower(), weaponName:lower()) then
+            return speed
+        end
+    end
+    
+    return 0.5
+end
+
+local function findTargetsInRange(range)
+    local char = LocalPlayer.Character
+    if not char then return {} end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return {} end
+    if not charactersFolder then return {} end
+
+    local playerCharSet = {}
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p.Character then
+            playerCharSet[p.Character] = true
+        end
+    end
+
+    local targets = {}
+    local myPos = hrp.Position
+
+    for _, mob in ipairs(charactersFolder:GetChildren()) do
+        if mob == char then continue end
+        if playerCharSet[mob] then continue end
+
+        local mobHRP = mob:FindFirstChild("HumanoidRootPart")
+        local mobHum = mob:FindFirstChildOfClass("Humanoid")
+        if not mobHRP or not mobHum then continue end
+        if mobHum.Health <= 0 then continue end
+        local dist = (mobHRP.Position - myPos).Magnitude
+        if dist <= range then
+            table.insert(targets, {
+                mob = mob,
+                dist = dist,
+                health = mobHum.Health,
+                maxHealth = mobHum.MaxHealth,
+            })
+        end
+    end
+
+    local priority = Options.KillAuraPriority and Options.KillAuraPriority.Value or "最寄りの敵"
+    if priority == "最寄りの敵" then
+        table.sort(targets, function(a, b) return a.dist < b.dist end)
+    elseif priority == "HPが低い順" then
+        table.sort(targets, function(a, b) return a.health < b.health end)
+    elseif priority == "HPが高い順" then
+        table.sort(targets, function(a, b) return a.health > b.health end)
+    end
+
+    return targets
+end
+
+local function autoEquipWeapon()
+    local char = LocalPlayer.Character
+    if not char then return false end
+    if char:FindFirstChildOfClass("Tool") then return true end
+    local backpack = LocalPlayer:FindFirstChild("Backpack")
+    if not backpack then return false end
+
+    local bestTool = nil
+    local bestSpeed = math.huge
+
+    for _, tool in ipairs(backpack:GetChildren()) do
+        if not tool:IsA("Tool") then continue end
+        if not (tool:FindFirstChild("Swing") or tool:FindFirstChild("HitTargets") or tool:FindFirstChild("RemoteClick")) then continue end
+        local speed = weaponSwingSpeeds[tool.Name] or 0.5
+        for wName, s in pairs(weaponSwingSpeeds) do
+            if string.find(tool.Name:lower(), wName:lower()) then speed = s break end
+        end
+        if speed < bestSpeed then
+            bestSpeed = speed
+            bestTool = tool
+        end
+    end
+
+    if bestTool then
+        pcall(function() bestTool.Parent = char end)
+        return true
+    end
+    return false
+end
+
+local function stopKillAura()
+    if killAuraConn then
+        killAuraConn:Disconnect()
+        killAuraConn = nil
+    end
+    killAuraLastSwing = 0
+    killAuraCurrentTarget = nil
+    killAuraTargetDistance = nil
+    if killAuraIndicatorLine then killAuraIndicatorLine.Visible = false end
+    if killAuraIndicatorCircle then killAuraIndicatorCircle.Visible = false end
+    pcall(function()
+        if setsimulationradius then setsimulationradius(50, 300) end
+    end)
+end
+
+local function startKillAura()
+    stopKillAura()
+
+    if not killAuraIndicatorLine then
+        killAuraIndicatorLine = Drawing.new("Line")
+        killAuraIndicatorLine.Thickness = 1.5
+        killAuraIndicatorLine.Color = Color3.fromRGB(255, 55, 55)
+        killAuraIndicatorLine.Transparency = 0.65
+        killAuraIndicatorLine.Visible = false
+    end
+    if not killAuraIndicatorCircle then
+        killAuraIndicatorCircle = Drawing.new("Circle")
+        killAuraIndicatorCircle.Thickness = 1.5
+        killAuraIndicatorCircle.Color = Color3.fromRGB(255, 55, 55)
+        killAuraIndicatorCircle.Transparency = 0.55
+        killAuraIndicatorCircle.Filled = false
+        killAuraIndicatorCircle.Visible = false
+    end
+
+    pcall(function()
+        if setsimulationradius then setsimulationradius(1000, 1000) end
+    end)
+
+    killAuraConn = RunService.Heartbeat:Connect(function()
+        if Toggles.KillAura and not Toggles.KillAura.Value then
+            killAuraCurrentTarget = nil
+            if killAuraIndicatorLine then killAuraIndicatorLine.Visible = false end
+            if killAuraIndicatorCircle then killAuraIndicatorCircle.Visible = false end
+            return
+        end
+
+        local success, err = pcall(function()
+            local char = LocalPlayer.Character
+            if not char then return end
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            if not hrp then return end
+
+            local tool = char:FindFirstChildOfClass("Tool")
+            if not tool and Toggles.KillAuraAutoEquip and Toggles.KillAuraAutoEquip.Value then
+                autoEquipWeapon()
+                tool = char:FindFirstChildOfClass("Tool")
+            end
+
+            if not tool then
+                killAuraCurrentTarget = nil
+                if killAuraIndicatorLine then killAuraIndicatorLine.Visible = false end
+                if killAuraIndicatorCircle then killAuraIndicatorCircle.Visible = false end
+                return
+            end
+
+            local swing = tool:FindFirstChild("Swing")
+            local hitTargets = tool:FindFirstChild("HitTargets")
+            local remoteClick = tool:FindFirstChild("RemoteClick")
+
+            local baseRange = Options.KillAuraRange and Options.KillAuraRange.Value or 20
+            local useExtendedRange = not Toggles.KillAuraExtendedRange or Toggles.KillAuraExtendedRange.Value
+            local attackRange = useExtendedRange and (baseRange + 2) or baseRange
+
+            local targets = findTargetsInRange(attackRange)
+            killAuraCurrentTarget = targets[1] and targets[1].mob or nil
+            killAuraTargetDistance = targets[1] and targets[1].dist or nil
+
+            local showIndicator = not Toggles.KillAuraShowIndicator or Toggles.KillAuraShowIndicator.Value
+            if showIndicator and killAuraCurrentTarget then
+                local camera = Workspace.CurrentCamera
+                if camera then
+                    local tHRP = killAuraCurrentTarget:FindFirstChild("HumanoidRootPart")
+                    if tHRP then
+                        local sp, onScreen = camera:WorldToViewportPoint(tHRP.Position)
+                        if onScreen and sp.Z > 0 then
+                            local vp = camera.ViewportSize
+                            local center = Vector2.new(vp.X / 2, vp.Y)
+                            local tgt = Vector2.new(sp.X, sp.Y)
+                            killAuraIndicatorLine.From = center
+                            killAuraIndicatorLine.To = tgt
+                            killAuraIndicatorLine.Visible = true
+                            local radius = math.clamp(1200 / math.max(killAuraTargetDistance, 1), 8, 40)
+                            killAuraIndicatorCircle.Position = tgt
+                            killAuraIndicatorCircle.Radius = radius
+                            killAuraIndicatorCircle.Visible = true
+                        else
+                            killAuraIndicatorLine.Visible = false
+                            killAuraIndicatorCircle.Visible = false
+                        end
+                    end
+                end
+            else
+                if killAuraIndicatorLine then killAuraIndicatorLine.Visible = false end
+                if killAuraIndicatorCircle then killAuraIndicatorCircle.Visible = false end
+            end
+
+            if #targets == 0 then return end
+
+            local weaponSpeed = getWeaponSwingSpeed()
+            local userSwingRate = Options.KillAuraSwingRate and Options.KillAuraSwingRate.Value or weaponSpeed
+            local effectiveSwingRate = math.max(weaponSpeed, userSwingRate)
+            local now = tick()
+            if now - killAuraLastSwing < effectiveSwingRate then return end
+
+            local mobModels = {}
+            local t = targets[1]
+            table.insert(mobModels, t.mob)
+
+            local attackSuccess = false
+
+            if swing and hitTargets then
+                local s1, e1 = pcall(function() swing:FireServer() end)
+                if s1 then
+                    killAuraLastSwing = now
+                    attackSuccess = true
+                    local s2, e2 = pcall(function() hitTargets:FireServer(mobModels) end)
+                    if not s2 then warn("[KillAura] HitTargets error: " .. tostring(e2)) end
+                else
+                    warn("[KillAura] Swing error: " .. tostring(e1))
+                end
+            elseif remoteClick then
+                local s, e = pcall(function() remoteClick:FireServer(targets[1].mob) end)
+                attackSuccess = s
+                if not s then warn("[KillAura] RemoteClick error: " .. tostring(e)) end
+            end
+
+            if attackSuccess and killAuraLastSwing ~= now then
+                killAuraLastSwing = now
+            end
+        end)
+
+        if not success then
+            warn("[KillAura] Error: " .. tostring(err))
+        end
+    end)
+end
+
+local fogOriginalStates = {}
+local fogObjects = {}
+local fogFEConns = {}
+
+local function makeFogObjectInvisible(obj)
+    local success, err = pcall(function()
+        local originalState = {}
+        
+        if obj:IsA("BasePart") then
+            originalState.Transparency = obj.Transparency
+            originalState.Material = obj.Material
+            obj.Transparency = 1
+            obj.Material = Enum.Material.Air
+            fogOriginalStates[obj] = originalState
+        elseif obj:IsA("ParticleEmitter") then
+            originalState.Enabled = obj.Enabled
+            obj.Enabled = false
+            fogOriginalStates[obj] = originalState
+        elseif obj:IsA("Beam") then
+            originalState.Enabled = obj.Enabled
+            obj.Enabled = false
+            fogOriginalStates[obj] = originalState
+        elseif obj:IsA("Trail") then
+            originalState.Enabled = obj.Enabled
+            obj.Enabled = false
+            fogOriginalStates[obj] = originalState
+        elseif obj:IsA("Smoke") then
+            originalState.Enabled = obj.Enabled
+            obj.Enabled = false
+            fogOriginalStates[obj] = originalState
+        elseif obj:IsA("Fire") then
+            originalState.Enabled = obj.Enabled
+            obj.Enabled = false
+            fogOriginalStates[obj] = originalState
+        elseif obj:IsA("Sparkles") then
+            originalState.Enabled = obj.Enabled
+            obj.Enabled = false
+            fogOriginalStates[obj] = originalState
+        elseif obj:IsA("Explosion") then
+            originalState.Visible = obj.Visible
+            obj.Visible = false
+            fogOriginalStates[obj] = originalState
+        elseif obj:IsA("Decal") or obj:IsA("Texture") then
+            originalState.Transparency = obj.Transparency
+            obj.Transparency = 1
+            fogOriginalStates[obj] = originalState
+        elseif obj:IsA("Light") then
+            originalState.Enabled = obj.Enabled
+            obj.Enabled = false
+            fogOriginalStates[obj] = originalState
+        elseif obj:IsA("Highlight") then
+            originalState.Enabled = obj.Enabled
+            obj.Enabled = false
+            fogOriginalStates[obj] = originalState
+        elseif obj:IsA("Folder") or obj:IsA("Model") then
+            for _, child in ipairs(obj:GetDescendants()) do
+                makeFogObjectInvisible(child)
+            end
+        end
+    end)
+end
+
+local function restoreFogObjectVisibility(obj)
+    if fogOriginalStates[obj] then
+        pcall(function()
+            local state = fogOriginalStates[obj]
+            if obj:IsA("BasePart") then
+                obj.Transparency = state.Transparency
+                obj.Material = state.Material
+            elseif obj:IsA("ParticleEmitter") or obj:IsA("Beam") or obj:IsA("Trail") 
+                or obj:IsA("Smoke") or obj:IsA("Fire") or obj:IsA("Sparkles") 
+                or obj:IsA("Light") or obj:IsA("Highlight") then
+                obj.Enabled = state.Enabled
+            elseif obj:IsA("Explosion") then
+                obj.Visible = state.Visible
+            elseif obj:IsA("Decal") or obj:IsA("Texture") then
+                obj.Transparency = state.Transparency
+            end
+        end)
+    end
+end
+
+local function applyRemoveFogToFolder(folder)
+    if not folder then return end
+    for _, child in ipairs(folder:GetChildren()) do
+        table.insert(fogObjects, child)
+        makeFogObjectInvisible(child)
+    end
+    for _, descendant in ipairs(folder:GetDescendants()) do
+        if not fogOriginalStates[descendant] then
+            makeFogObjectInvisible(descendant)
+        end
+    end
+end
+
+local function enableRemoveFog()
+    if not originalFog.stored then
+        originalFog.FogEnd = Lighting.FogEnd
+        originalFog.FogStart = Lighting.FogStart
+        originalFog.stored = true
+    end
+    Lighting.FogEnd = 100000
+    Lighting.FogStart = 0
+
+    local atm = Lighting:FindFirstChildOfClass("Atmosphere")
+    if atm then
+        if originalFog.AtmDensity == nil then
+            originalFog.AtmDensity = atm.Density
+            originalFog.AtmHaze = atm.Haze
+            originalFog.AtmGlare = atm.Glare
+        end
+        atm.Density = 0
+        atm.Haze = 0
+        atm.Glare = 0
+    end
+
+    for _, conn in ipairs(fogFEConns) do pcall(function() conn:Disconnect() end) end
+    fogFEConns = {}
+
+    table.insert(fogFEConns, Lighting.Changed:Connect(function(prop)
+        if Toggles.RemoveFog and not Toggles.RemoveFog.Value then return end
+        if prop == "FogEnd" then Lighting.FogEnd = 100000 end
+        if prop == "FogStart" then Lighting.FogStart = 0 end
+    end))
+
+    table.insert(fogFEConns, Lighting.ChildAdded:Connect(function(child)
+        if Toggles.RemoveFog and not Toggles.RemoveFog.Value then return end
+        if child:IsA("Atmosphere") then
+            child.Density = 0
+            child.Haze = 0
+            child.Glare = 0
+            table.insert(fogFEConns, child.Changed:Connect(function(p)
+                if Toggles.RemoveFog and not Toggles.RemoveFog.Value then return end
+                if p == "Density" then child.Density = 0 end
+                if p == "Haze" then child.Haze = 0 end
+                if p == "Glare" then child.Glare = 0 end
+            end))
+        end
+    end))
+
+    local atmosphere = Lighting:FindFirstChildOfClass("Atmosphere")
+    if atmosphere then
+        table.insert(fogFEConns, atmosphere.Changed:Connect(function(prop)
+            if Toggles.RemoveFog and not Toggles.RemoveFog.Value then return end
+            if prop == "Density" then atmosphere.Density = 0 end
+            if prop == "Haze" then atmosphere.Haze = 0 end
+            if prop == "Glare" then atmosphere.Glare = 0 end
+        end))
+    end
+
+    local fogFolder = Workspace:FindFirstChild("Fog")
+    if fogFolder then
+        fogOriginalStates = {}
+        fogObjects = {}
+        applyRemoveFogToFolder(fogFolder)
+
+        table.insert(fogFEConns, fogFolder.ChildAdded:Connect(function(child)
+            if Toggles.RemoveFog and not Toggles.RemoveFog.Value then return end
+            makeFogObjectInvisible(child)
+            for _, desc in ipairs(child:GetDescendants()) do
+                makeFogObjectInvisible(desc)
+            end
+        end))
+    end
+
+    table.insert(fogFEConns, Workspace.ChildAdded:Connect(function(child)
+        if Toggles.RemoveFog and not Toggles.RemoveFog.Value then return end
+        if child.Name == "Fog" then
+            applyRemoveFogToFolder(child)
+            table.insert(fogFEConns, child.ChildAdded:Connect(function(subChild)
+                if Toggles.RemoveFog and not Toggles.RemoveFog.Value then return end
+                makeFogObjectInvisible(subChild)
+                for _, desc in ipairs(subChild:GetDescendants()) do
+                    makeFogObjectInvisible(desc)
+                end
+            end))
+        end
+    end))
+end
+
+local function disableRemoveFog()
+    for _, conn in ipairs(fogFEConns) do pcall(function() conn:Disconnect() end) end
+    fogFEConns = {}
+
+    if originalFog.stored then
+        Lighting.FogEnd = originalFog.FogEnd
+        Lighting.FogStart = originalFog.FogStart
+    end
+
+    local atm = Lighting:FindFirstChildOfClass("Atmosphere")
+    if atm and originalFog.AtmDensity ~= nil then
+        atm.Density = originalFog.AtmDensity
+        atm.Haze = originalFog.AtmHaze
+        atm.Glare = originalFog.AtmGlare
+        originalFog.AtmDensity = nil
+        originalFog.AtmHaze = nil
+        originalFog.AtmGlare = nil
+    end
+
+    for obj, _ in pairs(fogOriginalStates) do
+        restoreFogObjectVisibility(obj)
+    end
+
+    fogOriginalStates = {}
+    fogObjects = {}
+end
+
+local function serverHop()
+    local placeId = game.PlaceId
+    local servers = {}
+    local req = syn and syn.request or http_request or request or httprequest
+
+    if req then
+        local sortOrder = math.random(0, 1) == 0 and "Asc" or "Desc"
+        local cursor = ""
+        local maxPages = 3
+
+        for _ = 1, maxPages do
+            local url = "https://games.roblox.com/v1/games/" .. placeId
+                .. "/servers/Public?sortOrder=" .. sortOrder .. "&limit=100"
+                .. (cursor ~= "" and ("&cursor=" .. cursor) or "")
+
+            local ok, response = pcall(req, { Url = url, Method = "GET" })
+            if not ok or not response or not response.Body then break end
+
+            local ok2, data = pcall(function()
+                return game:GetService("HttpService"):JSONDecode(response.Body)
+            end)
+            if not ok2 or not data or not data.data then break end
+
+            for _, server in ipairs(data.data) do
+                if server.id ~= game.JobId and server.playing < server.maxPlayers then
+                    table.insert(servers, server.id)
+                end
+            end
+
+            local nextPageCursor = data.nextPageCursor
+            if not nextPageCursor or nextPageCursor == "" or nextPageCursor == "null" then break end
+            cursor = tostring(nextPageCursor)
+        end
+    end
+
+    if #servers > 0 then
+        for i = #servers, 2, -1 do
+            local j = math.random(1, i)
+            servers[i], servers[j] = servers[j], servers[i]
+        end
+        TeleportService:TeleportToPlaceInstance(placeId, servers[1], LocalPlayer)
+        Library:Notify({ Title = "サーバーホップ", Description = "見つかった " .. #servers .. " 個のサーバーのいずれかに移動中...", Time = 3 })
+    else
+        TeleportService:Teleport(placeId, LocalPlayer)
+        Library:Notify({ Title = "サーバーホップ", Description = "他のサーバーが見つかりませんでした。再マッチング中...", Time = 3 })
+    end
+end
+
+local function rejoinServer()
+    local placeId = game.PlaceId
+    local jobId = game.JobId
+
+    if not jobId or jobId == "" then
+        pcall(function() TeleportService:Teleport(placeId, LocalPlayer) end)
+        Library:Notify({ Title = "再参加", Description = "JobIdなし - マッチング経由で再参加中...", Time = 3 })
+        return
+    end
+
+    Library:Notify({ Title = "再参加", Description = "サーバーに再参加中...", Time = 2 })
+
+    local ok1, err1 = pcall(function()
+        local opts = Instance.new("TeleportOptions")
+        opts.ServerInstanceId = jobId
+        TeleportService:TeleportAsync(placeId, { LocalPlayer }, opts)
+    end)
+    if ok1 then return end
+
+    local ok2, err2 = pcall(function()
+        TeleportService:TeleportToPlaceInstance(placeId, jobId, LocalPlayer)
+    end)
+    if ok2 then return end
+
+    pcall(function() TeleportService:Teleport(placeId, LocalPlayer) end)
+    Library:Notify({ Title = "再参加", Description = "サーバーが利用不可 - マッチング経由で再参加中...", Time = 3 })
+end
+
+local autoPickupActive = false
+local autoPickupThread = nil
+local autoPickupAttempts = {}
+
+local function stopAutoPickup()
+    autoPickupActive = false
+    if autoPickupThread then
+        pcall(function() task.cancel(autoPickupThread) end)
+        autoPickupThread = nil
+    end
+    pcall(function() if setsimulationradius then setsimulationradius(50, 300) end end)
+    autoPickupAttempts = {}
+end
+
+local function startAutoPickup()
+    stopAutoPickup()
+    autoPickupActive = true
+
+    pcall(function() if setsimulationradius then setsimulationradius(2048, 2048) end end)
+
+    autoPickupThread = task.spawn(function()
+        while autoPickupActive do
+            if Toggles.AutoPickup and not Toggles.AutoPickup.Value then
+                break
+            end
+
+            local char = LocalPlayer.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            if not hrp or not droppedItemsFolder then task.wait(0.5) continue end
+
+            local myPos = hrp.Position
+            local radius = Options.AutoPickupRadius and Options.AutoPickupRadius.Value or 7
+
+            local useRemote = not Toggles.AutoPickupMethodRemote or Toggles.AutoPickupMethodRemote.Value
+            local useTouch = not Toggles.AutoPickupMethodTouch or Toggles.AutoPickupMethodTouch.Value
+            local usePrompt = not Toggles.AutoPickupMethodPrompt or Toggles.AutoPickupMethodPrompt.Value
+
+            for _, item in ipairs(droppedItemsFolder:GetChildren()) do
+                if not autoPickupActive then break end
+                if Toggles.AutoPickup and not Toggles.AutoPickup.Value then break end
+                if not item.Parent then continue end
+
+                local itemCat = itemCategoryLookup[item.Name]
+                if itemCat and autoPickupCategories[itemCat] == false then continue end
+
+                local mainPart = item.PrimaryPart or getItemMainPart(item)
+                if not mainPart then continue end
+
+                local dist = (mainPart.Position - myPos).Magnitude
+                if dist > radius then continue end
+
+                local now = tick()
+                if autoPickupAttempts[item] and (now - autoPickupAttempts[item]) < 0.35 then continue end
+                autoPickupAttempts[item] = now
+
+                if itemCat == "Fuel" or itemCat == "Resource" or itemCat == "Food" then
+                    pcall(function()
+                        local Event = game:GetService("ReplicatedStorage").Remotes.Tools.AdjustBackpack
+                        if Event then
+                            Event:FireServer(item)
+                        end
+                    end)
+                else
+                    if useRemote then
+                        pcall(function()
+                            if pickUpItemRemote then pickUpItemRemote:FireServer(item) end
+                        end)
+                        pcall(function()
+                            if adjustBackpackRemote then adjustBackpackRemote:FireServer(item) end
+                        end)
+                    end
+
+                    if useTouch then
+                        pcall(function()
+                            if firetouchinterest then
+                                firetouchinterest(hrp, mainPart, 0)
+                                firetouchinterest(hrp, mainPart, 1)
+                            end
+                        end)
+                    end
+
+                    if usePrompt then
+                        pcall(function()
+                            if fireproximityprompt then
+                                local prompt = item:FindFirstChildWhichIsA("ProximityPrompt", true)
+                                if prompt then fireproximityprompt(prompt) end
+                            end
+                        end)
+                    end
+                end
+
+                task.wait()
+            end
+
+            for itemRef in pairs(autoPickupAttempts) do
+                if not itemRef.Parent then
+                    autoPickupAttempts[itemRef] = nil
+                end
+            end
+
+            task.wait(0.1)
+        end
+
+        autoPickupActive = false
+        pcall(function() if setsimulationradius then setsimulationradius(50, 300) end end)
+    end)
+end
+
+local function stopRepairAura()
+    if repairAuraConn then
+        repairAuraConn:Disconnect()
+        repairAuraConn = nil
+    end
+end
+
+local function startRepairAura()
+    stopRepairAura()
+    local lastFire = 0
+
+    repairAuraConn = RunService.Heartbeat:Connect(function()
+        if not Toggles.RepairAura or not Toggles.RepairAura.Value then return end
+
+        local rate = Options.RepairAuraRate and Options.RepairAuraRate.Value or 1
+        local interval = 1 / rate
+        local now = tick()
+        if now - lastFire < interval then return end
+
+        local char = LocalPlayer.Character
+        if not char then return end
+        local tool = char:FindFirstChildOfClass("Tool")
+        if not tool or tool.Name ~= "Repair Hammer" then return end
+
+        local repairRemote = tool:FindFirstChild("Repair")
+        if not repairRemote then return end
+
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+        local myPos = hrp.Position
+        local maxDist = Options.RepairAuraRange and Options.RepairAuraRange.Value or 30
+
+        if not structuresFolder then return end
+        local nearest = nil
+        local nearestDist = math.huge
+        for _, child in ipairs(structuresFolder:GetDescendants()) do
+            if child:IsA("Model") then
+                local part = child.PrimaryPart or getItemMainPart(child)
+                if part then
+                    local dist = (myPos - part.Position).Magnitude
+                    if dist <= maxDist and dist < nearestDist then
+                        nearestDist = dist
+                        nearest = child
+                    end
+                end
+            end
+        end
+
+        if nearest then
+            lastFire = now
+            pcall(function()
+                repairRemote:FireServer(nearest)
+            end)
+        end
+    end)
+end
+
+local playerAddedConn = Players.PlayerAdded:Connect(function(player)
+    if playerESPVars.ESP then
+        task.wait(2)
+        createPlayerESP(player)
+    end
+end)
+table.insert(connections, playerAddedConn)
+
+local playerRemovingConn = Players.PlayerRemoving:Connect(function(player)
+    removePlayerESP(player)
+end)
+table.insert(connections, playerRemovingConn)
+
+LocalPlayer.CharacterAdded:Connect(function(char)
+    char:WaitForChild("HumanoidRootPart", 10)
+    task.wait(0.5)
+    if Toggles.AutoPickup and Toggles.AutoPickup.Value then startAutoPickup() end
+    if Toggles.KillAura and Toggles.KillAura.Value then startKillAura() end
+    if Toggles.Fullbright and Toggles.Fullbright.Value then enableFullbright() end
+    if Toggles.RemoveFog and Toggles.RemoveFog.Value then enableRemoveFog() end
+end)
+
+local function applyESPTextSize(size)
+    espConfig.textSize = size
+    local small = math.max(size - 2, 8)
+    for _, sys in pairs(espSystems) do
+        for _, esp in pairs(sys.instances) do
+            if esp.NameLabel then esp.NameLabel.TextSize = size end
+            if esp.DistLabel then esp.DistLabel.TextSize = small end
+        end
+    end
+    for _, esp in pairs(mobESPInstances) do
+        if esp.NameLabel then esp.NameLabel.TextSize = size end
+        if esp.DistLabel then esp.DistLabel.TextSize = small end
+    end
+    for _, esp in pairs(structureESPInstances) do
+        if esp.NameLabel then esp.NameLabel.TextSize = size end
+        if esp.DistLabel then esp.DistLabel.TextSize = small end
+    end
+    for _, esp in pairs(playerESPInstances) do
+        if esp.NameLabel then esp.NameLabel.TextSize = size end
+        if esp.ToolLabel then esp.ToolLabel.TextSize = small end
+        if esp.HealthLabel then esp.HealthLabel.TextSize = small end
+        if esp.DistLabel then esp.DistLabel.TextSize = small end
+    end
+end
+
+local function applyESPTransparency()
+    local fillT = espConfig.fillTransparency
+    local outlineT = espConfig.outlineTransparency
+    local function updateH(esp)
+        if esp.Highlight and esp.Highlight.Parent then
+            esp.Highlight.FillTransparency = fillT
+            esp.Highlight.OutlineTransparency = outlineT
+        end
+    end
+    for _, sys in pairs(espSystems) do
+        for _, esp in pairs(sys.instances) do updateH(esp) end
+    end
+    for _, esp in pairs(mobESPInstances) do updateH(esp) end
+    for _, esp in pairs(structureESPInstances) do updateH(esp) end
+    for _, esp in pairs(playerESPInstances) do updateH(esp) end
+end
+
+do
+local espSettingsGroup = Tabs.Visuals:AddLeftGroupbox("ESP設定", "settings")
+
+espSettingsGroup:AddSlider("ESPMaxDistance", {
+    Text = "最大距離", Default = 250, Min = 50, Max = 2000, Rounding = 0, Suffix = " スタッド",
+    Tooltip = "すべてのESPシステムで共有される最大描画距離。",
+    Callback = function()
+        refreshMobESP(); refreshPlayerESP(); refreshStructureESP()
+        for _, sys in pairs(espSystems) do sys.refresh() end
+    end,
+})
+
+local function setAllESPNames(state)
+    mobOptions.Name = state; refreshMobESP()
+    playerESPVars.Name = state; refreshPlayerESP()
+    structureESPVars.Name = state; refreshStructureESP()
+    for _, sys in pairs(espSystems) do sys.vars.Name = state; sys.refresh() end
+end
+
+local function setAllESPDistance(state)
+    mobOptions.Distance = state; refreshMobESP()
+    playerESPVars.Distance = state; refreshPlayerESP()
+    structureESPVars.Distance = state; refreshStructureESP()
+    for _, sys in pairs(espSystems) do sys.vars.Distance = state; sys.refresh() end
+end
+
+espSettingsGroup:AddToggle("ESPShowNames", { Text = "名前を表示", Default = true, Tooltip = "すべてのESPに名前を表示します。", Callback = function(s) setAllESPNames(s) end })
+espSettingsGroup:AddToggle("ESPShowDistance", { Text = "距離を表示", Default = true, Tooltip = "すべてのESPに距離を表示します。", Callback = function(s) setAllESPDistance(s) end })
+
+espSettingsGroup:AddSlider("ESPTextSize", {
+    Text = "文字サイズ", Default = 8, Min = 8, Max = 24, Rounding = 0, Suffix = "px",
+    Tooltip = "すべてのESPラベルのフォントサイズ。小さいほど画面がすっきりします。",
+    Callback = function(v) applyESPTextSize(v) end,
+})
+
+espSettingsGroup:AddSlider("ESPFillTransparency", {
+    Text = "塗りつぶし透明度", Default = 0, Min = 0, Max = 100, Rounding = 0, Suffix = "%",
+    Tooltip = "チャムスの塗りつぶし不透明度。0%＝完全な不透明、100%＝透明（輪郭のみ）。",
+    Callback = function(v) espConfig.fillTransparency = v / 100; applyESPTransparency() end,
+})
+
+espSettingsGroup:AddSlider("ESPOutlineTransparency", {
+    Text = "輪郭透明度", Default = 0, Min = 0, Max = 100, Rounding = 0, Suffix = "%",
+    Tooltip = "チャムスの輪郭の不透明度。0%＝完全な不透明輪郭。",
+    Callback = function(v) espConfig.outlineTransparency = v / 100; applyESPTransparency() end,
+})
+
+local mobESPGroup = Tabs.Visuals:AddLeftGroupbox("モブESP", "eye")
+mobESPGroup:AddToggle("MobESP", { Text = "モブESP", Default = false, Tooltip = "壁越しにゾンビやモンスターをハイライトします。", Callback = function(s) mobOptions.ESP = s; refreshMobESP() end })
+mobESPGroup:AddToggle("MobChams", { Text = "チャムス", Default = false, Callback = function(s) mobOptions.Chams = s; refreshMobESP() end })
+
+local playerESPGroup = Tabs.Visuals:AddLeftGroupbox("プレイヤーESP", "users")
+playerESPGroup:AddToggle("PlayerESP", { Text = "プレイヤーESP", Default = true, Callback = function(s) playerESPVars.ESP = s; refreshPlayerESP() end })
+playerESPGroup:AddToggle("PlayerChams", { Text = "チャムス", Default = true, Callback = function(s) playerESPVars.Chams = s; refreshPlayerESP() end })
+playerESPGroup:AddToggle("PlayerHealth", { Text = "体力表示", Default = false, Tooltip = "プレイヤーの頭上に体力バーとHPを表示します。", Callback = function(s) playerESPVars.Health = s; refreshPlayerESP() end })
+
+local itemESPGroup = Tabs.Visuals:AddRightGroupbox("アイテムESP", "package")
+
+itemESPGroup:AddToggle("ItemESPChams", {
+    Text = "チャムス（全カテゴリ）", Default = false,
+    Tooltip = "すべてのアイテムカテゴリのチャムスハイライト。",
+    Callback = function(s)
+        for _, sys in pairs(espSystems) do sys.vars.Chams = s; sys.refresh() end
+    end,
+})
+itemESPGroup:AddDivider()
+
+local itemESPDefs = {
+    { key = "Gun", text = "銃ESP", tip = "銃（赤）" },
+    { key = "Melee", text = "近接武器ESP", tip = "近接武器（オレンジ）" },
+    { key = "Medical", text = "医療品ESP", tip = "医療アイテム（緑）" },
+    { key = "Armor", text = "防具ESP", tip = "防具（青）" },
+    { key = "Food", text = "食料ESP", tip = "食料（ライム）" },
+    { key = "Resource", text = "資源ESP", tip = "資源（シアン）" },
+    { key = "Fuel", text = "燃料ESP", tip = "燃料（ゴールド）" },
+    { key = "Ability", text = "アビリティESP", tip = "アビリティ（紫）" },
+}
+for _, d in ipairs(itemESPDefs) do
+    itemESPGroup:AddToggle(d.key .. "ESPEnabled", {
+        Text = d.text, Default = true, Tooltip = d.tip,
+        Callback = function(s) espSystems[d.key].vars.ESP = s; espSystems[d.key].refresh() end,
+    }):AddColorPicker(d.key .. "ESPColor", {
+        Default = espSystems[d.key].colors.fill,
+        Title = d.text .. " カラー",
+        Callback = function(c)
+            espSystems[d.key].colors.fill = c
+            for _, esp in pairs(espSystems[d.key].instances) do
+                if esp.Highlight and esp.Highlight.Parent then esp.Highlight.FillColor = c end
+                if esp.NameLabel then esp.NameLabel.TextColor3 = c end
+            end
+        end,
+    })
+end
+
+itemESPGroup:AddDivider()
+itemESPGroup:AddLabel("構造物")
+itemESPGroup:AddToggle("StructureESP", { Text = "構造物ESP", Default = false, Callback = function(s) structureESPVars.ESP = s; refreshStructureESP() end })
+itemESPGroup:AddToggle("StructureChams", { Text = "チャムス", Default = false, Callback = function(s) structureESPVars.Chams = s; refreshStructureESP() end })
+
+end
+
+do
+local movementGroup = Tabs.Player:AddLeftGroupbox("移動", "move")
+
+movementGroup:AddToggle("SpeedHack", {
+    Text = "スピードハック",
+    Default = true,
+    Callback = function(state)
+        if state then
+            local char = LocalPlayer.Character
+            if char then
+                local humanoid = char:FindFirstChildOfClass("Humanoid")
+                if humanoid then
+                    originalValues.walkSpeed = humanoid.WalkSpeed
+                end
+            end
+            Library:Notify({ Title = "スピードハック", Description = "有効化しました（FEバイパス中）", Time = 2 })
+        else
+            local char = LocalPlayer.Character
+            if char then
+                local humanoid = char:FindFirstChildOfClass("Humanoid")
+                if humanoid then
+                    humanoid.WalkSpeed = originalValues.walkSpeed or 16
+                end
+            end
+            Library:Notify({ Title = "スピードハック", Description = "速度を " .. (originalValues.walkSpeed or 16) .. " に復元しました", Time = 2 })
+        end
+    end,
+})
+
+movementGroup:AddSlider("SpeedValue", {
+    Text = "移動速度",
+    Default = 31,
+    Min = 16,
+    Max = 200,
+    Rounding = 0,
+    Suffix = " スタッド/秒",
+})
+
+movementGroup:AddToggle("InfJump", {
+    Text = "無限ジャンプ",
+    Default = false,
+    Callback = function(state)
+        Library:Notify({
+            Title = "無限ジャンプ",
+            Description = state and "有効 - どこでもジャンプ可能！" or "無効",
+            Time = 2,
+        })
+    end,
+})
+
+local jumpConn = UserInputService.JumpRequest:Connect(function()
+    if Toggles.InfJump and Toggles.InfJump.Value then
+        local char = LocalPlayer.Character
+        if char then
+            local humanoid = char:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+            end
+        end
+    end
+end)
+table.insert(connections, jumpConn)
+
+movementGroup:AddToggle("NoClip", {
+    Text = "ノークリップ",
+    Default = false,
+    Callback = function(state)
+        Library:Notify({
+            Title = "ノークリップ",
+            Description = state and "有効 - 壁をすり抜け可能！" or "無効",
+            Time = 2,
+        })
+    end,
+})
+
+end
+
+do
+local killAuraGroup = Tabs.Combat:AddLeftGroupbox("キルオーラ", "target")
+
+killAuraGroup:AddToggle("KillAura", {
+    Text = "キルオーラ",
+    Default = true,
+    Tooltip = "範囲内のすべてのモブを1度のスイングで攻撃します。優先度、自動装備、インジケーターは以下で設定可能。",
+    Callback = function(state)
+        if state then
+            startKillAura()
+            Library:Notify({ Title = "キルオーラ", Description = "有効化しました", Time = 2 })
+        else
+            stopKillAura()
+            Library:Notify({ Title = "キルオーラ", Description = "無効化しました", Time = 2 })
+        end
+    end,
+})
+
+killAuraGroup:AddDropdown("KillAuraPriority", {
+    Values = {"最寄りの敵", "HPが低い順", "HPが高い順"},
+    Default = 1,
+    Text = "ターゲット優先度",
+    Tooltip = "最初に攻撃するモブを決定します。",
+})
+
+killAuraGroup:AddToggle("KillAuraAutoEquip", {
+    Text = "武器の自動装備",
+    Default = false,
+    Tooltip = "何も持っていない時、バックパックから最速の武器を自動装備します。",
+})
+
+killAuraGroup:AddToggle("KillAuraShowIndicator", {
+    Text = "ターゲットインジケーター表示",
+    Default = true,
+    Tooltip = "現在のメインターゲットに向けて赤色のラインと円を描画します。",
+})
+
+killAuraGroup:AddToggle("KillAuraExtendedRange", {
+    Text = "拡張範囲（+2スタッド）",
+    Default = true,
+    Tooltip = "リーチに2スタッドを追加し、射程ギリギリでのヒットを補助します。",
+})
+
+killAuraGroup:AddSlider("KillAuraRange", {
+    Text = "基本範囲",
+    Default = 20,
+    Min = 1,
+    Max = 20,
+    Rounding = 0,
+    Suffix = " スタッド",
+    Tooltip = "基本攻撃距離。拡張範囲で+2スタッド追加されます。通常の近接リーチは通常5〜7スタッドです。",
+})
+
+killAuraGroup:AddSlider("KillAuraSwingRate", {
+    Text = "スイング遅延",
+    Default = 0.1,
+    Min = 0.1,
+    Max = 1.0,
+    Rounding = 2,
+    Suffix = " 秒",
+    Tooltip = "スイング間の最小遅延。武器本来の速度が常に最低制限として適用されます。",
+})
+
+killAuraGroup:AddLabel("武器の速度：", { DoesWrap = true })
+killAuraGroup:AddLabel(" ナイフ / 刀：0.25〜0.3秒", { DoesWrap = true })
+killAuraGroup:AddLabel(" バット / 手斧：0.4〜0.45秒", { DoesWrap = true })
+killAuraGroup:AddLabel(" 消防斧 / 大ハンマー：0.55〜0.6秒", { DoesWrap = true })
+
+end
+
+do
+local autoPickupGroup = Tabs.Exploits:AddLeftGroupbox("自動拾得", "magnet")
+
+autoPickupGroup:AddToggle("AutoPickup", {
+    Text = "自動拾得",
+    Default = true,
+    Tooltip = "範囲内のアイテムを自動的に拾います。最大4つのFE方式を並行使用。",
+    Callback = function(state)
+        if state then
+            startAutoPickup()
+            Library:Notify({ Title = "自動拾得", Description = "有効化しました", Time = 2 })
+        else
+            stopAutoPickup()
+            Library:Notify({ Title = "自動拾得", Description = "停止しました", Time = 2 })
+        end
+    end,
+})
+
+autoPickupGroup:AddSlider("AutoPickupRadius", {
+    Text = "半径",
+    Default = 7,
+    Min = 5,
+    Max = 35,
+    Rounding = 0,
+    Suffix = " スタッド",
+    Tooltip = "アイテムを拾う距離。A+B+Cを組み合わせると遠距離でも快適に機能します。",
+})
+
+autoPickupGroup:AddDivider()
+autoPickupGroup:AddLabel("FE方式（組み合わせてテスト）", { DoesWrap = true })
+
+autoPickupGroup:AddToggle("AutoPickupMethodRemote", {
+    Text = "A - リモート (PickUpItem)",
+    Default = true,
+    Tooltip = "Remotes.Interaction.PickUpItem + AdjustBackpackでFireServer。サーバー側に厳格な距離制限がない場合に高速動作します。",
+})
+
+autoPickupGroup:AddToggle("AutoPickupMethodTouch", {
+    Text = "B - タッチシミュレート",
+    Default = true,
+    Tooltip = "firetouchinterest(HRP, itemPart) - プレイヤーがアイテムパーツに触れたことをシミュレートします。",
+})
+
+autoPickupGroup:AddToggle("AutoPickupMethodPrompt", {
+    Text = "C - プロキシミティプロンプト",
+    Default = true,
+    Tooltip = "fireproximityprompt(prompt) - アイテムのプロンプトを直接実行します。プロンプト形式のアイテムに有効。",
+})
+
+autoPickupGroup:AddDivider()
+autoPickupGroup:AddLabel("カテゴリフィルター（アイテム拾得切替）")
+
+local pickupCategoryDefs = {
+    { key = "Gun", text = "銃" },
+    { key = "Melee", text = "近接武器" },
+    { key = "Medical", text = "医療品" },
+    { key = "Armor", text = "防具" },
+    { key = "Food", text = "食料" },
+    { key = "Resource", text = "資源" },
+    { key = "Fuel", text = "燃料" },
+    { key = "Ability", text = "アビリティ" },
+    { key = "Ammo", text = "弾薬" },
+    { key = "Consumables", text = "消耗品" },
+    { key = "Backpacks", text = "バックパック" },
+    { key = "MiscItems", text = "その他アイテム" },
+    { key = "Structures", text = "構造物" },
+}
+
+for _, catDef in ipairs(pickupCategoryDefs) do
+    autoPickupGroup:AddToggle("PickupCat_" .. catDef.key, {
+        Text = catDef.text,
+        Default = autoPickupCategories[catDef.key] ~= false,
+        Tooltip = catDef.text .. " の自動拾得を有効/無効にします",
+        Callback = function(state)
+            autoPickupCategories[catDef.key] = state
+        end,
+    })
+end
+
+local repairAuraGroup = Tabs.Exploits:AddRightGroupbox("修理オーラ", "wrench")
+
+repairAuraGroup:AddToggle("InstantInteract", {
+    Text = "インスタントインタラクト（遅延スキップ）",
+    Default = false,
+    Tooltip = "すべてのProximityPromptの長押し時間を即座になくします。",
+    Callback = function(state)
+        updateInstantInteract(state)
+        Library:Notify({ Title = "インスタントインタラクト", Description = state and "有効 - 長押し時間が削除されました！" or "無効 - 元の長押し時間が復元されました", Time = 2 })
+    end,
+})
+
+repairAuraGroup:AddDivider()
+
+repairAuraGroup:AddToggle("RepairAura", {
+    Text = "修理オーラ",
+    Default = false,
+    Tooltip = "範囲内の構造物を自動的に修理します。修理ハンマーの装備が必要です。",
+    Callback = function(state)
+        if state then
+            startRepairAura()
+            Library:Notify({ Title = "修理オーラ", Description = "有効化しました", Time = 2 })
+        else
+            stopRepairAura()
+            Library:Notify({ Title = "修理オーラ", Description = "停止しました", Time = 2 })
+        end
+    end,
+})
+
+repairAuraGroup:AddSlider("RepairAuraRange", {
+    Text = "範囲",
+    Default = 30,
+    Min = 5,
+    Max = 30,
+    Rounding = 0,
+    Suffix = " スタッド",
+    Tooltip = "修理対象となる構造物までの最大距離。",
+})
+
+repairAuraGroup:AddSlider("RepairAuraRate", {
+    Text = "頻度",
+    Default = 1,
+    Min = 1,
+    Max = 10,
+    Rounding = 0,
+    Suffix = "/秒",
+    Tooltip = "1秒あたりの修理リモート送信回数（1 = 最小、10 = 最大）。",
+})
+
+repairAuraGroup:AddLabel("必要条件：修理ハンマー装備", { DoesWrap = true })
+
+end
+
+do
+local utilityGroup = Tabs.Misc:AddLeftGroupbox("ユーティリティ", "shield-check")
+
+utilityGroup:AddToggle("AntiAFK", {
+    Text = "アンチAFK",
+    Default = true,
+    Tooltip = "アイドル状態によるキックを防止します。",
+    Callback = function(state)
+        if state then
+            startAntiAFK()
+            Library:Notify({ Title = "アンチAFK", Description = "有効 - アイドルキックされません", Time = 2 })
+        else
+            stopAntiAFK()
+            Library:Notify({ Title = "アンチAFK", Description = "無効", Time = 2 })
+        end
+    end,
+})
+
+utilityGroup:AddToggle("Fullbright", {
+    Text = "フルブライト",
+    Default = true,
+    Tooltip = "ライティングプロパティを変更してゲーム世界を明るくします。",
+    Callback = function(state)
+        if state then
+            enableFullbright()
+            Library:Notify({ Title = "フルブライト", Description = "有効化しました", Time = 2 })
+        else
+            disableFullbright()
+            Library:Notify({ Title = "フルブライト", Description = "無効 - 元の明るさに戻しました", Time = 2 })
+        end
+    end,
+})
+
+utilityGroup:AddToggle("RemoveFog", {
+    Text = "霧の削除",
+    Default = true,
+    Tooltip = "視界をクリアにするため視覚的な霧を削除します。",
+    Callback = function(state)
+        if state then
+            enableRemoveFog()
+            Library:Notify({ Title = "霧の削除", Description = "有効 - 視界がクリアになりました", Time = 2 })
+        else
+            disableRemoveFog()
+            Library:Notify({ Title = "霧の削除", Description = "無効 - 元の霧に戻しました", Time = 2 })
+        end
+    end,
+})
+
+local serverGroup = Tabs.Misc:AddRightGroupbox("サーバーツール", "server")
+
+serverGroup:AddButton("サーバーホップ", function()
+    Library:Notify({ Title = "サーバーホップ", Description = "新しいサーバーを検索中...", Time = 2 })
+    serverHop()
+end)
+
+serverGroup:AddButton("サーバー再参加", function()
+    Library:Notify({ Title = "再参加", Description = "サーバーに再参加中...", Time = 2 })
+    rejoinServer()
+end)
+
+serverGroup:AddDivider()
+serverGroup:AddLabel("現在のジョブID：")
+serverGroup:AddLabel("JobId", { Text = game.JobId ~= "" and game.JobId:sub(1, 30) .. "..." or "不明", DoesWrap = true })
+
+end
+
+Library:OnUnload(function()
+    for char, _ in pairs(mobESPInstances) do
+        removeMobESP(char)
+    end
+
+    for _, sys in pairs(espSystems) do
+        for item, _ in pairs(sys.instances) do
+            sys.remove(item)
+        end
+    end
+
+    for player, _ in pairs(playerESPInstances) do
+        removePlayerESP(player)
+    end
+
+    for structure, _ in pairs(structureESPInstances) do
+        removeStructureESP(structure)
+    end
+
+    for _, conn in ipairs(connections) do
+        if typeof(conn) == "RBXScriptConnection" then
+            pcall(function() conn:Disconnect() end)
+        end
+    end
+    connections = {}
+
+    stopAutoPickup()
+    stopRepairAura()
+    stopKillAura()
+    updateInstantInteract(false)
+    if Toggles.RemoveFog and Toggles.RemoveFog.Value then
+        disableRemoveFog()
+    end
+
+    if Toggles.SpeedHack and Toggles.SpeedHack.Value then
+        local char = LocalPlayer.Character
+        if char then
+            local humanoid = char:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                humanoid.WalkSpeed = originalValues.walkSpeed or 16
+            end
+        end
+    end
+
+    if Toggles.Fullbright and Toggles.Fullbright.Value then
+        disableFullbright()
+    end
+
+    stopAntiAFK()
+
+    Library:Notify({ Title = "Baka Pote", Description = "アンロードされました。さようなら！", Time = 3 })
+    print("Baka Pote unloaded.")
+end)
+
+do
+local MenuGroup = Tabs["UI Settings"]:AddLeftGroupbox("メニュー", "wrench")
+
+MenuGroup:AddToggle("KeybindMenuOpen", {
+    Default = Library.KeybindFrame.Visible,
+    Text = "キーバインドメニューを開く",
+    Callback = function(value)
+        Library.KeybindFrame.Visible = value
+    end,
+})
+
+MenuGroup:AddToggle("ShowCustomCursor", {
+    Text = "カスタムカーソル",
+    Default = true,
+    Callback = function(Value)
+        Library.ShowCustomCursor = Value
+    end,
+})
+
+MenuGroup:AddDropdown("NotificationSide", {
+    Values = { "左", "右" },
+    Default = "右",
+    Text = "通知の位置",
+    Callback = function(Value)
+        Library:SetNotifySide(Value == "左" and "Left" or "Right")
+    end,
+})
+
+MenuGroup:AddDropdown("DPIDropdown", {
+    Values = { "50%", "75%", "100%", "125%", "150%", "175%", "200%" },
+    Default = "100%",
+    Text = "DPIスケール",
+    Callback = function(Value)
+        Value = Value:gsub("%%", "")
+        local DPI = tonumber(Value)
+        Library:SetDPIScale(DPI)
+    end,
+})
+
+MenuGroup:AddSlider("UICornerSlider", {
+    Text = "角の丸み",
+    Default = Library.CornerRadius,
+    Min = 0,
+    Max = 20,
+    Rounding = 0,
+    Callback = function(value)
+        Window:SetCornerRadius(value)
+    end,
+})
+
+MenuGroup:AddDivider()
+MenuGroup:AddLabel("メニューバインド")
+    :AddKeyPicker("MenuKeybind", { Default = "RightShift", NoUI = true, Text = "メニューキーバインド" })
+
+end
+
+Library.ToggleKeybind = Options.MenuKeybind
+
+ThemeManager:SetLibrary(Library)
+SaveManager:SetLibrary(Library)
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetIgnoreIndexes({ "MenuKeybind" })
+
+ThemeManager:SetFolder("BakaPote")
+SaveManager:SetFolder("BakaPote/survive-the-apocalypse")
+
+SaveManager:BuildConfigSection(Tabs["UI Settings"])
+ThemeManager:ApplyToTab(Tabs["UI Settings"])
+SaveManager:LoadAutoloadConfig()
+
+pcall(function()
+    local coreGui = game:GetService("CoreGui")
+    local screenGui = coreGui:FindFirstChildWhichIsA("ScreenGui")
+    if screenGui then
+        for _, desc in ipairs(screenGui:GetDescendants()) do
+            if desc:IsA("TextButton") or desc:IsA("ImageButton") then
+                local text = (desc.Text or ""):lower()
+                if text:find("lock") then
+                    desc.Visible = false
+                elseif text:find("toggle") or desc.Size.X.Offset < 100 and desc.Size.Y.Offset < 50 then
+                    desc.Size = UDim2.new(0, 35, 0, 35)
+                end
+            end
+        end
+    end
+end)
+
+if Toggles.KillAura and Toggles.KillAura.Value then startKillAura() end
+if Toggles.AutoPickup and Toggles.AutoPickup.Value then startAutoPickup() end
+if Toggles.AntiAFK and Toggles.AntiAFK.Value then startAntiAFK() end
+if Toggles.Fullbright and Toggles.Fullbright.Value then enableFullbright() end
+if Toggles.RemoveFog and Toggles.RemoveFog.Value then enableRemoveFog() end
+if Toggles.InstantInteract and Toggles.InstantInteract.Value then updateInstantInteract(true) end
+
+refreshMobESP()
+refreshStructureESP()
+refreshPlayerESP()
+for _, sys in pairs(espSystems) do
+    if sys.vars.ESP then sys.refresh() end
+end
+
+Library:Notify({ Title = "Baka Pote", Description = "ロード完了！銃|近接|医療|防具|食料|資源\n右Shift = メニュー切り替え", Time = 5 })
+
+local espCounts = { Gun="Red", Melee="Orange", Medical="Green", Armor="Blue", Food="Lime", Resource="Silver" }
+print("Baka Pote loaded | " .. #itemNames .. " items tracked | Right Shift = menu")
+for cat, col in pairs(espCounts) do
+    print(string.format(" %s ESP (%s) - %d items", cat, col, #espSystems[cat].items))
+
+end
