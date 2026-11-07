@@ -1129,8 +1129,8 @@ local function disableFullbright()
         Lighting.Ambient = originalLighting.Ambient
         Lighting.OutdoorAmbient = originalLighting.OutdoorAmbient
         Lighting.ClockTime = originalLighting.ClockTime
-        Lighting.FogEnd = originalFog.FogEnd
-        Lighting.FogStart = originalFog.FogStart
+        Lighting.FogEnd = originalLighting.FogEnd
+        Lighting.FogStart = originalLighting.FogStart
         Lighting.GlobalShadows = originalLighting.GlobalShadows
     end
 end
@@ -1387,9 +1387,8 @@ local function startKillAura()
             if now - killAuraLastSwing < effectiveSwingRate then return end
 
             local mobModels = {}
-            for _, t in ipairs(targets) do
-                table.insert(mobModels, t.mob)
-            end
+            local t = targets[1]
+            table.insert(mobModels, t.mob)
 
             local attackSuccess = false
 
@@ -1480,9 +1479,6 @@ local function makeFogObjectInvisible(obj)
             end
         end
     end)
-    if not success then
-        warn("[RemoveFog] Failed to process object: " .. tostring(err))
-    end
 end
 
 local function restoreFogObjectVisibility(obj)
@@ -1502,6 +1498,19 @@ local function restoreFogObjectVisibility(obj)
                 obj.Transparency = state.Transparency
             end
         end)
+    end
+end
+
+local function applyRemoveFogToFolder(folder)
+    if not folder then return end
+    for _, child in ipairs(folder:GetChildren()) do
+        table.insert(fogObjects, child)
+        makeFogObjectInvisible(child)
+    end
+    for _, descendant in ipairs(folder:GetDescendants()) do
+        if not fogOriginalStates[descendant] then
+            makeFogObjectInvisible(descendant)
+        end
     end
 end
 
@@ -1535,6 +1544,21 @@ local function enableRemoveFog()
         if prop == "FogStart" then Lighting.FogStart = 0 end
     end))
 
+    table.insert(fogFEConns, Lighting.ChildAdded:Connect(function(child)
+        if Toggles.RemoveFog and not Toggles.RemoveFog.Value then return end
+        if child:IsA("Atmosphere") then
+            child.Density = 0
+            child.Haze = 0
+            child.Glare = 0
+            table.insert(fogFEConns, child.Changed:Connect(function(p)
+                if Toggles.RemoveFog and not Toggles.RemoveFog.Value then return end
+                if p == "Density" then child.Density = 0 end
+                if p == "Haze" then child.Haze = 0 end
+                if p == "Glare" then child.Glare = 0 end
+            end))
+        end
+    end))
+
     local atmosphere = Lighting:FindFirstChildOfClass("Atmosphere")
     if atmosphere then
         table.insert(fogFEConns, atmosphere.Changed:Connect(function(prop)
@@ -1549,16 +1573,7 @@ local function enableRemoveFog()
     if fogFolder then
         fogOriginalStates = {}
         fogObjects = {}
-
-        for _, child in ipairs(fogFolder:GetChildren()) do
-            table.insert(fogObjects, child)
-            makeFogObjectInvisible(child)
-        end
-        for _, descendant in ipairs(fogFolder:GetDescendants()) do
-            if not fogOriginalStates[descendant] then
-                makeFogObjectInvisible(descendant)
-            end
-        end
+        applyRemoveFogToFolder(fogFolder)
 
         table.insert(fogFEConns, fogFolder.ChildAdded:Connect(function(child)
             if Toggles.RemoveFog and not Toggles.RemoveFog.Value then return end
@@ -1567,11 +1582,21 @@ local function enableRemoveFog()
                 makeFogObjectInvisible(desc)
             end
         end))
-
-        Library:Notify({ Title = "Remove Fog", Description = "Enabled - " .. #fogObjects .. " fog objects hidden", Time = 2 })
-    else
-        Library:Notify({ Title = "Remove Fog", Description = "Enabled - Lighting fog cleared (no Fog folder found)", Time = 2 })
     end
+
+    table.insert(fogFEConns, Workspace.ChildAdded:Connect(function(child)
+        if Toggles.RemoveFog and not Toggles.RemoveFog.Value then return end
+        if child.Name == "Fog" then
+            applyRemoveFogToFolder(child)
+            table.insert(fogFEConns, child.ChildAdded:Connect(function(subChild)
+                if Toggles.RemoveFog and not Toggles.RemoveFog.Value then return end
+                makeFogObjectInvisible(subChild)
+                for _, desc in ipairs(subChild:GetDescendants()) do
+                    makeFogObjectInvisible(desc)
+                end
+            end))
+        end
+    end))
 end
 
 local function disableRemoveFog()
@@ -1599,8 +1624,6 @@ local function disableRemoveFog()
 
     fogOriginalStates = {}
     fogObjects = {}
-
-    Library:Notify({ Title = "Remove Fog", Description = "Disabled - fog restored", Time = 2 })
 end
 
 local function serverHop()
@@ -1864,6 +1887,8 @@ LocalPlayer.CharacterAdded:Connect(function(char)
     task.wait(0.5)
     if Toggles.AutoPickup and Toggles.AutoPickup.Value then startAutoPickup() end
     if Toggles.KillAura and Toggles.KillAura.Value then startKillAura() end
+    if Toggles.Fullbright and Toggles.Fullbright.Value then enableFullbright() end
+    if Toggles.RemoveFog and Toggles.RemoveFog.Value then enableRemoveFog() end
 end)
 
 local function applyESPTextSize(size)
