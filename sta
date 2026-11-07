@@ -38,7 +38,7 @@ Library.ForceCheckbox = false
 Library.ShowToggleFrameInKeybinds = true
 
 local Window = Library:CreateWindow({
-    Title = "SPYMM v8.2",
+    Title = "Baka Pote",
     Footer = "Survive the Apocalypse",
     NotifySide = "Right",
     ShowCustomCursor = true,
@@ -2438,8 +2438,8 @@ Library:OnUnload(function()
 
     stopAntiAFK()
 
-    Library:Notify({ Title = "SPYMM", Description = "Unloaded. Bye!", Time = 3 })
-    print("SPYMM v8.2 unloaded.")
+    Library:Notify({ Title = "Baka Pote", Description = "Unloaded. Bye!", Time = 3 })
+    print("Baka Pote unloaded.")
 end)
 
 do
@@ -2505,8 +2505,8 @@ SaveManager:SetLibrary(Library)
 SaveManager:IgnoreThemeSettings()
 SaveManager:SetIgnoreIndexes({ "MenuKeybind" })
 
-ThemeManager:SetFolder("SPYMM")
-SaveManager:SetFolder("SPYMM/survive-the-apocalypse")
+ThemeManager:SetFolder("BakaPote")
+SaveManager:SetFolder("BakaPote/survive-the-apocalypse")
 
 SaveManager:BuildConfigSection(Tabs["UI Settings"])
 ThemeManager:ApplyToTab(Tabs["UI Settings"])
@@ -2543,10 +2543,10 @@ for _, sys in pairs(espSystems) do
     if sys.vars.ESP then sys.refresh() end
 end
 
-Library:Notify({ Title = "SPYMM v8.2", Description = "Loaded! Gun|Melee|Medical|Armor|Food|Resources\nRight Shift = toggle menu.", Time = 5 })
+Library:Notify({ Title = "Baka Pote", Description = "Loaded! Gun|Melee|Medical|Armor|Food|Resources\nRight Shift = toggle menu.", Time = 5 })
 
 local espCounts = { Gun="Red", Melee="Orange", Medical="Green", Armor="Blue", Food="Lime", Resource="Silver" }
-print("SPYMM v8.2 loaded | " .. #itemNames .. " items tracked | Right Shift = menu")
+print("Baka Pote loaded | " .. #itemNames .. " items tracked | Right Shift = menu")
 for cat, col in pairs(espCounts) do
     print(string.format(" %s ESP (%s) - %d items", cat, col, #espSystems[cat].items))
 end
