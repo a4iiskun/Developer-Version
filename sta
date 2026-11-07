@@ -45,12 +45,12 @@ local Window = Library:CreateWindow({
 })
 
 local Tabs = {
-    Visuals = Window:AddTab("Visuals", "eye"),
-    Player = Window:AddTab("Player", "user"),
-    Combat = Window:AddTab("Combat", "swords"),
-    Exploits = Window:AddTab("Exploits", "zap"),
-    Misc = Window:AddTab("Misc", "settings"),
-    ["UI Settings"] = Window:AddTab("UI Settings", "sliders-horizontal"),
+    Visuals = Window:AddTab("ビジュアル", "eye"),
+    Player = Window:AddTab("プレイヤー", "user"),
+    Combat = Window:AddTab("戦闘", "swords"),
+    Exploits = Window:AddTab("便利機能", "zap"),
+    Misc = Window:AddTab("その他", "settings"),
+    ["UI Settings"] = Window:AddTab("UI設定", "sliders-horizontal"),
 }
 
 local connections = {}
@@ -86,7 +86,7 @@ local espConfig = {
 local espDefinitions = {
     {
         key = "Gun",
-        displayName = "Gun ESP",
+        displayName = "銃ESP",
         icon = "crosshair",
         items = {
             "AA-12", "AK-47", "Assault Rifle", "Desert Eagle", "Double Barrel",
@@ -97,7 +97,7 @@ local espDefinitions = {
     },
     {
         key = "Melee",
-        displayName = "Melee ESP",
+        displayName = "近接武器ESP",
         icon = "swords",
         items = {
             "Bat", "Chainsaw", "Crowbar", "Fire Axe", "Hatchet", "Katana", "Knife",
@@ -107,7 +107,7 @@ local espDefinitions = {
     },
     {
         key = "Medical",
-        displayName = "Medical ESP",
+        displayName = "医療品ESP",
         icon = "heart-pulse",
         items = {
             "Bandage", "Compound H", "Compound I", "Compound R", "Compound S", "Medkit"
@@ -116,7 +116,7 @@ local espDefinitions = {
     },
     {
         key = "Armor",
-        displayName = "Armor ESP",
+        displayName = "防具ESP",
         icon = "shield",
         items = {
             "Power Armor", "Light Armor", "Medium Armor", "Heavy Armor"
@@ -125,7 +125,7 @@ local espDefinitions = {
     },
     {
         key = "Food",
-        displayName = "Food ESP",
+        displayName = "食料ESP",
         icon = "utensils",
         items = {
             "Chips", "Carrot", "Bloxiade", "Beans", "MRE", "Bloxy Cola"
@@ -134,7 +134,7 @@ local espDefinitions = {
     },
     {
         key = "Resource",
-        displayName = "Resources ESP",
+        displayName = "資源ESP",
         icon = "box",
         items = {
             "AC", "Battery", "Battery Pack", "Bucket", "Dumbell", "Exhaust Pipe",
@@ -145,14 +145,14 @@ local espDefinitions = {
     },
     {
         key = "Fuel",
-        displayName = "Fuel ESP",
+        displayName = "燃料ESP",
         icon = "zap",
         items = { "Nuclear Fuel", "Refined Fuel", "Fuel" },
         colors = { fill = Color3.fromRGB(255, 220, 0), outline = Color3.fromRGB(255, 255, 255), text = Color3.fromRGB(255, 240, 160) },
     },
     {
         key = "Ability",
-        displayName = "Abilities ESP",
+        displayName = "アビリティESP",
         icon = "zap-circle",
         items = {
             "Airstrike", "Attack Order", "Call of the Dead",
@@ -716,7 +716,7 @@ local function createStructureESP(structure)
         nameLabel.Size = UDim2.new(1, 0, 0.5, 0)
         nameLabel.Position = UDim2.new(0, 0, 0, 0)
         nameLabel.BackgroundTransparency = 1
-        nameLabel.Text = "[STRUCTURE] " .. structure.Name
+        nameLabel.Text = "[構造物] " .. structure.Name
         nameLabel.TextColor3 = Color3.fromRGB(0, 255, 200)
         nameLabel.TextStrokeTransparency = 0.2
         nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
@@ -1239,12 +1239,12 @@ local function findTargetsInRange(range)
         end
     end
 
-    local priority = Options.KillAuraPriority and Options.KillAuraPriority.Value or "Nearest"
-    if priority == "Nearest" then
+    local priority = Options.KillAuraPriority and Options.KillAuraPriority.Value or "最寄りの敵"
+    if priority == "最寄りの敵" then
         table.sort(targets, function(a, b) return a.dist < b.dist end)
-    elseif priority == "Lowest HP" then
+    elseif priority == "HPが低い順" then
         table.sort(targets, function(a, b) return a.health < b.health end)
-    elseif priority == "Highest HP" then
+    elseif priority == "HPが高い順" then
         table.sort(targets, function(a, b) return a.health > b.health end)
     end
 
@@ -1676,10 +1676,10 @@ local function serverHop()
             servers[i], servers[j] = servers[j], servers[i]
         end
         TeleportService:TeleportToPlaceInstance(placeId, servers[1], LocalPlayer)
-        Library:Notify({ Title = "Server Hop", Description = "Joining 1 of " .. #servers .. " servers found...", Time = 3 })
+        Library:Notify({ Title = "サーバーホップ", Description = "見つかった " .. #servers .. " 個のサーバーのいずれかに移動中...", Time = 3 })
     else
         TeleportService:Teleport(placeId, LocalPlayer)
-        Library:Notify({ Title = "Server Hop", Description = "No other servers found, re-matchmaking...", Time = 3 })
+        Library:Notify({ Title = "サーバーホップ", Description = "他のサーバーが見つかりませんでした。再マッチング中...", Time = 3 })
     end
 end
 
@@ -1689,11 +1689,11 @@ local function rejoinServer()
 
     if not jobId or jobId == "" then
         pcall(function() TeleportService:Teleport(placeId, LocalPlayer) end)
-        Library:Notify({ Title = "Rejoin", Description = "No JobId - rejoining via matchmaking...", Time = 3 })
+        Library:Notify({ Title = "再参加", Description = "JobIdなし - マッチング経由で再参加中...", Time = 3 })
         return
     end
 
-    Library:Notify({ Title = "Rejoin", Description = "Rejoining server...", Time = 2 })
+    Library:Notify({ Title = "再参加", Description = "サーバーに再参加中...", Time = 2 })
 
     local ok1, err1 = pcall(function()
         local opts = Instance.new("TeleportOptions")
@@ -1701,16 +1701,14 @@ local function rejoinServer()
         TeleportService:TeleportAsync(placeId, { LocalPlayer }, opts)
     end)
     if ok1 then return end
-    warn("[Rejoin] TeleportAsync failed: " .. tostring(err1))
 
     local ok2, err2 = pcall(function()
         TeleportService:TeleportToPlaceInstance(placeId, jobId, LocalPlayer)
     end)
     if ok2 then return end
-    warn("[Rejoin] TeleportToPlaceInstance failed: " .. tostring(err2))
 
     pcall(function() TeleportService:Teleport(placeId, LocalPlayer) end)
-    Library:Notify({ Title = "Rejoin", Description = "Server unavailable - rejoining via matchmaking...", Time = 3 })
+    Library:Notify({ Title = "再参加", Description = "サーバーが利用不可 - マッチング経由で再参加中...", Time = 3 })
 end
 
 local autoPickupActive = false
@@ -1943,11 +1941,11 @@ local function applyESPTransparency()
 end
 
 do
-local espSettingsGroup = Tabs.Visuals:AddLeftGroupbox("ESP Settings", "settings")
+local espSettingsGroup = Tabs.Visuals:AddLeftGroupbox("ESP設定", "settings")
 
 espSettingsGroup:AddSlider("ESPMaxDistance", {
-    Text = "Max Distance", Default = 250, Min = 50, Max = 2000, Rounding = 0, Suffix = " studs",
-    Tooltip = "Maximum render distance shared by all ESP systems.",
+    Text = "最大距離", Default = 250, Min = 50, Max = 2000, Rounding = 0, Suffix = " スタッド",
+    Tooltip = "すべてのESPシステムで共有される最大描画距離。",
     Callback = function()
         refreshMobESP(); refreshPlayerESP(); refreshStructureESP()
         for _, sys in pairs(espSystems) do sys.refresh() end
@@ -1968,41 +1966,41 @@ local function setAllESPDistance(state)
     for _, sys in pairs(espSystems) do sys.vars.Distance = state; sys.refresh() end
 end
 
-espSettingsGroup:AddToggle("ESPShowNames", { Text = "Show Names", Default = true, Tooltip = "Show labels on all ESPs.", Callback = function(s) setAllESPNames(s) end })
-espSettingsGroup:AddToggle("ESPShowDistance", { Text = "Show Distance", Default = true, Tooltip = "Show distance on all ESPs.", Callback = function(s) setAllESPDistance(s) end })
+espSettingsGroup:AddToggle("ESPShowNames", { Text = "名前を表示", Default = true, Tooltip = "すべてのESPに名前を表示します。", Callback = function(s) setAllESPNames(s) end })
+espSettingsGroup:AddToggle("ESPShowDistance", { Text = "距離を表示", Default = true, Tooltip = "すべてのESPに距離を表示します。", Callback = function(s) setAllESPDistance(s) end })
 
 espSettingsGroup:AddSlider("ESPTextSize", {
-    Text = "Text Size", Default = 8, Min = 8, Max = 24, Rounding = 0, Suffix = "px",
-    Tooltip = "Font size for all ESP labels. Lower = less cluttered screen.",
+    Text = "文字サイズ", Default = 8, Min = 8, Max = 24, Rounding = 0, Suffix = "px",
+    Tooltip = "すべてのESPラベルのフォントサイズ。小さいほど画面がすっきりします。",
     Callback = function(v) applyESPTextSize(v) end,
 })
 
 espSettingsGroup:AddSlider("ESPFillTransparency", {
-    Text = "Fill Transparency", Default = 0, Min = 0, Max = 100, Rounding = 0, Suffix = "%",
-    Tooltip = "Chams fill opacity for all ESP. 0% = fully solid, 100% = invisible fill (outline only).",
+    Text = "塗りつぶし透明度", Default = 0, Min = 0, Max = 100, Rounding = 0, Suffix = "%",
+    Tooltip = "チャムスの塗りつぶし不透明度。0%＝完全な不透明、100%＝透明（輪郭のみ）。",
     Callback = function(v) espConfig.fillTransparency = v / 100; applyESPTransparency() end,
 })
 
 espSettingsGroup:AddSlider("ESPOutlineTransparency", {
-    Text = "Outline Transparency", Default = 0, Min = 0, Max = 100, Rounding = 0, Suffix = "%",
-    Tooltip = "Chams outline opacity for all ESP. 0% = fully solid outline.",
+    Text = "輪郭透明度", Default = 0, Min = 0, Max = 100, Rounding = 0, Suffix = "%",
+    Tooltip = "チャムスの輪郭の不透明度。0%＝完全な不透明輪郭。",
     Callback = function(v) espConfig.outlineTransparency = v / 100; applyESPTransparency() end,
 })
 
-local mobESPGroup = Tabs.Visuals:AddLeftGroupbox("Mob ESP", "eye")
-mobESPGroup:AddToggle("MobESP", { Text = "Mob ESP", Default = false, Tooltip = "Highlight zombies/monsters through walls.", Callback = function(s) mobOptions.ESP = s; refreshMobESP() end })
-mobESPGroup:AddToggle("MobChams", { Text = "Chams", Default = false, Callback = function(s) mobOptions.Chams = s; refreshMobESP() end })
+local mobESPGroup = Tabs.Visuals:AddLeftGroupbox("モブESP", "eye")
+mobESPGroup:AddToggle("MobESP", { Text = "モブESP", Default = false, Tooltip = "壁越しにゾンビやモンスターをハイライトします。", Callback = function(s) mobOptions.ESP = s; refreshMobESP() end })
+mobESPGroup:AddToggle("MobChams", { Text = "チャムス", Default = false, Callback = function(s) mobOptions.Chams = s; refreshMobESP() end })
 
-local playerESPGroup = Tabs.Visuals:AddLeftGroupbox("Player ESP", "users")
-playerESPGroup:AddToggle("PlayerESP", { Text = "Player ESP", Default = true, Callback = function(s) playerESPVars.ESP = s; refreshPlayerESP() end })
-playerESPGroup:AddToggle("PlayerChams", { Text = "Chams", Default = true, Callback = function(s) playerESPVars.Chams = s; refreshPlayerESP() end })
-playerESPGroup:AddToggle("PlayerHealth", { Text = "Show Health", Default = false, Tooltip = "Health bar + HP above players.", Callback = function(s) playerESPVars.Health = s; refreshPlayerESP() end })
+local playerESPGroup = Tabs.Visuals:AddLeftGroupbox("プレイヤーESP", "users")
+playerESPGroup:AddToggle("PlayerESP", { Text = "プレイヤーESP", Default = true, Callback = function(s) playerESPVars.ESP = s; refreshPlayerESP() end })
+playerESPGroup:AddToggle("PlayerChams", { Text = "チャムス", Default = true, Callback = function(s) playerESPVars.Chams = s; refreshPlayerESP() end })
+playerESPGroup:AddToggle("PlayerHealth", { Text = "体力表示", Default = false, Tooltip = "プレイヤーの頭上に体力バーとHPを表示します。", Callback = function(s) playerESPVars.Health = s; refreshPlayerESP() end })
 
-local itemESPGroup = Tabs.Visuals:AddRightGroupbox("Item ESP", "package")
+local itemESPGroup = Tabs.Visuals:AddRightGroupbox("アイテムESP", "package")
 
 itemESPGroup:AddToggle("ItemESPChams", {
-    Text = "Chams (All Categories)", Default = false,
-    Tooltip = "Chams highlight for all item categories.",
+    Text = "チャムス（全カテゴリ）", Default = false,
+    Tooltip = "すべてのアイテムカテゴリのチャムスハイライト。",
     Callback = function(s)
         for _, sys in pairs(espSystems) do sys.vars.Chams = s; sys.refresh() end
     end,
@@ -2010,14 +2008,14 @@ itemESPGroup:AddToggle("ItemESPChams", {
 itemESPGroup:AddDivider()
 
 local itemESPDefs = {
-    { key = "Gun", text = "Gun ESP", tip = "Guns (Red)" },
-    { key = "Melee", text = "Melee ESP", tip = "Melee (Orange)" },
-    { key = "Medical", text = "Medical ESP", tip = "Medical Items (Green)" },
-    { key = "Armor", text = "Armor ESP", tip = "Armor (Blue)" },
-    { key = "Food", text = "Food ESP", tip = "Food (Lime)" },
-    { key = "Resource", text = "Resources ESP", tip = "Resources (Cyan)" },
-    { key = "Fuel", text = "Fuel ESP", tip = "Fuel (Gold)" },
-    { key = "Ability", text = "Abilities ESP", tip = "Abilities (Purple)" },
+    { key = "Gun", text = "銃ESP", tip = "銃（赤）" },
+    { key = "Melee", text = "近接武器ESP", tip = "近接武器（オレンジ）" },
+    { key = "Medical", text = "医療品ESP", tip = "医療アイテム（緑）" },
+    { key = "Armor", text = "防具ESP", tip = "防具（青）" },
+    { key = "Food", text = "食料ESP", tip = "食料（ライム）" },
+    { key = "Resource", text = "資源ESP", tip = "資源（シアン）" },
+    { key = "Fuel", text = "燃料ESP", tip = "燃料（ゴールド）" },
+    { key = "Ability", text = "アビリティESP", tip = "アビリティ（紫）" },
 }
 for _, d in ipairs(itemESPDefs) do
     itemESPGroup:AddToggle(d.key .. "ESPEnabled", {
@@ -2025,7 +2023,7 @@ for _, d in ipairs(itemESPDefs) do
         Callback = function(s) espSystems[d.key].vars.ESP = s; espSystems[d.key].refresh() end,
     }):AddColorPicker(d.key .. "ESPColor", {
         Default = espSystems[d.key].colors.fill,
-        Title = d.text .. " Color",
+        Title = d.text .. " カラー",
         Callback = function(c)
             espSystems[d.key].colors.fill = c
             for _, esp in pairs(espSystems[d.key].instances) do
@@ -2037,17 +2035,17 @@ for _, d in ipairs(itemESPDefs) do
 end
 
 itemESPGroup:AddDivider()
-itemESPGroup:AddLabel("Structures")
-itemESPGroup:AddToggle("StructureESP", { Text = "Structure ESP", Default = false, Callback = function(s) structureESPVars.ESP = s; refreshStructureESP() end })
-itemESPGroup:AddToggle("StructureChams", { Text = "Chams", Default = false, Callback = function(s) structureESPVars.Chams = s; refreshStructureESP() end })
+itemESPGroup:AddLabel("構造物")
+itemESPGroup:AddToggle("StructureESP", { Text = "構造物ESP", Default = false, Callback = function(s) structureESPVars.ESP = s; refreshStructureESP() end })
+itemESPGroup:AddToggle("StructureChams", { Text = "チャムス", Default = false, Callback = function(s) structureESPVars.Chams = s; refreshStructureESP() end })
 
 end
 
 do
-local movementGroup = Tabs.Player:AddLeftGroupbox("Movement", "move")
+local movementGroup = Tabs.Player:AddLeftGroupbox("移動", "move")
 
 movementGroup:AddToggle("SpeedHack", {
-    Text = "Speed Hack",
+    Text = "スピードハック",
     Default = true,
     Callback = function(state)
         if state then
@@ -2058,7 +2056,7 @@ movementGroup:AddToggle("SpeedHack", {
                     originalValues.walkSpeed = humanoid.WalkSpeed
                 end
             end
-            Library:Notify({ Title = "Speed Hack", Description = "Enabled (FE bypass active)", Time = 2 })
+            Library:Notify({ Title = "スピードハック", Description = "有効化しました（FEバイパス中）", Time = 2 })
         else
             local char = LocalPlayer.Character
             if char then
@@ -2067,27 +2065,27 @@ movementGroup:AddToggle("SpeedHack", {
                     humanoid.WalkSpeed = originalValues.walkSpeed or 16
                 end
             end
-            Library:Notify({ Title = "Speed Hack", Description = "Speed restored to " .. (originalValues.walkSpeed or 16), Time = 2 })
+            Library:Notify({ Title = "スピードハック", Description = "速度を " .. (originalValues.walkSpeed or 16) .. " に復元しました", Time = 2 })
         end
     end,
 })
 
 movementGroup:AddSlider("SpeedValue", {
-    Text = "Walk Speed",
+    Text = "移動速度",
     Default = 31,
     Min = 16,
     Max = 200,
     Rounding = 0,
-    Suffix = " studs/s",
+    Suffix = " スタッド/秒",
 })
 
 movementGroup:AddToggle("InfJump", {
-    Text = "Inf Jump",
+    Text = "無限ジャンプ",
     Default = false,
     Callback = function(state)
         Library:Notify({
-            Title = "Inf Jump",
-            Description = state and "Enabled - jump anywhere!" or "Disabled",
+            Title = "無限ジャンプ",
+            Description = state and "有効 - どこでもジャンプ可能！" or "無効",
             Time = 2,
         })
     end,
@@ -2107,12 +2105,12 @@ end)
 table.insert(connections, jumpConn)
 
 movementGroup:AddToggle("NoClip", {
-    Text = "NoClip",
+    Text = "ノークリップ",
     Default = false,
     Callback = function(state)
         Library:Notify({
-            Title = "NoClip",
-            Description = state and "Enabled - walk through walls!" or "Disabled",
+            Title = "ノークリップ",
+            Description = state and "有効 - 壁をすり抜け可能！" or "無効",
             Time = 2,
         })
     end,
@@ -2121,270 +2119,270 @@ movementGroup:AddToggle("NoClip", {
 end
 
 do
-local killAuraGroup = Tabs.Combat:AddLeftGroupbox("Kill Aura", "target")
+local killAuraGroup = Tabs.Combat:AddLeftGroupbox("キルオーラ", "target")
 
 killAuraGroup:AddToggle("KillAura", {
-    Text = "Kill Aura",
+    Text = "キルオーラ",
     Default = true,
-    Tooltip = "AoE auto-attack: hits ALL mobs in range in one swing. Priority, auto-equip, and visual indicator configurable below.",
+    Tooltip = "範囲内のすべてのモブを1度のスイングで攻撃します。優先度、自動装備、インジケーターは以下で設定可能。",
     Callback = function(state)
         if state then
             startKillAura()
-            Library:Notify({ Title = "Kill Aura", Description = "Enabled", Time = 2 })
+            Library:Notify({ Title = "キルオーラ", Description = "有効化しました", Time = 2 })
         else
             stopKillAura()
-            Library:Notify({ Title = "Kill Aura", Description = "Disabled", Time = 2 })
+            Library:Notify({ Title = "キルオーラ", Description = "無効化しました", Time = 2 })
         end
     end,
 })
 
 killAuraGroup:AddDropdown("KillAuraPriority", {
-    Values = {"Nearest", "Lowest HP", "Highest HP"},
+    Values = {"最寄りの敵", "HPが低い順", "HPが高い順"},
     Default = 1,
-    Text = "Target Priority",
-    Tooltip = "Determines which mob is attacked first (relevant for RemoteClick fallback; AoE mode hits all anyway).",
+    Text = "ターゲット優先度",
+    Tooltip = "最初に攻撃するモブを決定します。",
 })
 
 killAuraGroup:AddToggle("KillAuraAutoEquip", {
-    Text = "Auto-Equip Weapon",
+    Text = "武器の自動装備",
     Default = false,
-    Tooltip = "Automatically equips the fastest available weapon from your backpack when nothing is held.",
+    Tooltip = "何も持っていない時、バックパックから最速の武器を自動装備します。",
 })
 
 killAuraGroup:AddToggle("KillAuraShowIndicator", {
-    Text = "Show Target Indicator",
+    Text = "ターゲットインジケーター表示",
     Default = true,
-    Tooltip = "Draws a red snapline and circle to the current primary target.",
+    Tooltip = "現在のメインターゲットに向けて赤色のラインと円を描画します。",
 })
 
 killAuraGroup:AddToggle("KillAuraExtendedRange", {
-    Text = "Extended Range (+2 studs)",
+    Text = "拡張範囲（+2スタッド）",
     Default = true,
-    Tooltip = "Adds 2 studs to your range. Helps the server register hits at the edge of reach.",
+    Tooltip = "リーチに2スタッドを追加し、射程ギリギリでのヒットを補助します。",
 })
 
 killAuraGroup:AddSlider("KillAuraRange", {
-    Text = "Base Range",
+    Text = "基本範囲",
     Default = 20,
     Min = 1,
     Max = 20,
     Rounding = 0,
-    Suffix = " studs",
-    Tooltip = "Base attack distance. Extended Range adds +2 studs. Normal melee reach is ~5-7 studs.",
+    Suffix = " スタッド",
+    Tooltip = "基本攻撃距離。拡張範囲で+2スタッド追加されます。通常の近接リーチは通常5〜7スタッドです。",
 })
 
 killAuraGroup:AddSlider("KillAuraSwingRate", {
-    Text = "Swing Delay",
+    Text = "スイング遅延",
     Default = 0.1,
     Min = 0.1,
     Max = 1.0,
     Rounding = 2,
-    Suffix = " s",
-    Tooltip = "Minimum delay between swings. Weapon speed is always enforced as a hard lower bound.",
+    Suffix = " 秒",
+    Tooltip = "スイング間の最小遅延。武器本来の速度が常に最低制限として適用されます。",
 })
 
-killAuraGroup:AddLabel("Weapon Speeds:", { DoesWrap = true })
-killAuraGroup:AddLabel(" Knife/Katana: 0.25-0.3s", { DoesWrap = true })
-killAuraGroup:AddLabel(" Bat/Hatchet: 0.4-0.45s", { DoesWrap = true })
-killAuraGroup:AddLabel(" Fire Axe/Sledgehammer: 0.55-0.6s", { DoesWrap = true })
+killAuraGroup:AddLabel("武器の速度：", { DoesWrap = true })
+killAuraGroup:AddLabel(" ナイフ / 刀：0.25〜0.3秒", { DoesWrap = true })
+killAuraGroup:AddLabel(" バット / 手斧：0.4〜0.45秒", { DoesWrap = true })
+killAuraGroup:AddLabel(" 消防斧 / 大ハンマー：0.55〜0.6秒", { DoesWrap = true })
 
 end
 
 do
-local autoPickupGroup = Tabs.Exploits:AddLeftGroupbox("Auto Pickup", "magnet")
+local autoPickupGroup = Tabs.Exploits:AddLeftGroupbox("自動拾得", "magnet")
 
 autoPickupGroup:AddToggle("AutoPickup", {
-    Text = "Auto Pickup",
+    Text = "自動拾得",
     Default = true,
-    Tooltip = "Automatically picks up items within radius. Uses up to 4 FE methods in parallel.",
+    Tooltip = "範囲内のアイテムを自動的に拾います。最大4つのFE方式を並行使用。",
     Callback = function(state)
         if state then
             startAutoPickup()
-            Library:Notify({ Title = "Auto Pickup", Description = "Active", Time = 2 })
+            Library:Notify({ Title = "自動拾得", Description = "有効化しました", Time = 2 })
         else
             stopAutoPickup()
-            Library:Notify({ Title = "Auto Pickup", Description = "Stopped", Time = 2 })
+            Library:Notify({ Title = "自動拾得", Description = "停止しました", Time = 2 })
         end
     end,
 })
 
 autoPickupGroup:AddSlider("AutoPickupRadius", {
-    Text = "Radius",
+    Text = "半径",
     Default = 7,
     Min = 5,
     Max = 35,
     Rounding = 0,
-    Suffix = " studs",
-    Tooltip = "How far away items are picked up. Combine methods A+B+C for best coverage at range.",
+    Suffix = " スタッド",
+    Tooltip = "アイテムを拾う距離。A+B+Cを組み合わせると遠距離でも快適に機能します。",
 })
 
 autoPickupGroup:AddDivider()
-autoPickupGroup:AddLabel("FE Methods (combine to test)", { DoesWrap = true })
+autoPickupGroup:AddLabel("FE方式（組み合わせてテスト）", { DoesWrap = true })
 
 autoPickupGroup:AddToggle("AutoPickupMethodRemote", {
-    Text = "A - Remote (PickUpItem)",
+    Text = "A - リモート (PickUpItem)",
     Default = true,
-    Tooltip = "FireServer on Remotes.Interaction.PickUpItem + AdjustBackpack. Fast, works when server has no strict distance check.",
+    Tooltip = "Remotes.Interaction.PickUpItem + AdjustBackpackでFireServer。サーバー側に厳格な距離制限がない場合に高速動作します。",
 })
 
 autoPickupGroup:AddToggle("AutoPickupMethodTouch", {
-    Text = "B - Touch Simulate",
+    Text = "B - タッチシミュレート",
     Default = true,
-    Tooltip = "firetouchinterest(HRP, itemPart) - simulates the player touching the item part. Fires server-side Touched handlers.",
+    Tooltip = "firetouchinterest(HRP, itemPart) - プレイヤーがアイテムパーツに触れたことをシミュレートします。",
 })
 
 autoPickupGroup:AddToggle("AutoPickupMethodPrompt", {
-    Text = "C - ProximityPrompt",
+    Text = "C - プロキシミティプロンプト",
     Default = true,
-    Tooltip = "fireproximityprompt(prompt) - fires the item's ProximityPrompt if one exists. Useful for items using prompt-based pickup.",
+    Tooltip = "fireproximityprompt(prompt) - アイテムのプロンプトを直接実行します。プロンプト形式のアイテムに有効。",
 })
 
 autoPickupGroup:AddDivider()
-autoPickupGroup:AddLabel("Category Filter (Item Pickup Toggle)")
+autoPickupGroup:AddLabel("カテゴリフィルター（アイテム拾得切替）")
 
 local pickupCategoryDefs = {
-    { key = "Gun", text = "Guns" },
-    { key = "Melee", text = "Melee Weapons" },
-    { key = "Medical", text = "Medical Items" },
-    { key = "Armor", text = "Armor" },
-    { key = "Food", text = "Food" },
-    { key = "Resource", text = "Resources" },
-    { key = "Fuel", text = "Fuel" },
-    { key = "Ability", text = "Abilities" },
-    { key = "Ammo", text = "Ammo" },
-    { key = "Consumables", text = "Consumables" },
-    { key = "Backpacks", text = "Backpacks" },
-    { key = "MiscItems", text = "Misc Items" },
-    { key = "Structures", text = "Structures" },
+    { key = "Gun", text = "銃" },
+    { key = "Melee", text = "近接武器" },
+    { key = "Medical", text = "医療品" },
+    { key = "Armor", text = "防具" },
+    { key = "Food", text = "食料" },
+    { key = "Resource", text = "資源" },
+    { key = "Fuel", text = "燃料" },
+    { key = "Ability", text = "アビリティ" },
+    { key = "Ammo", text = "弾薬" },
+    { key = "Consumables", text = "消耗品" },
+    { key = "Backpacks", text = "バックパック" },
+    { key = "MiscItems", text = "その他アイテム" },
+    { key = "Structures", text = "構造物" },
 }
 
 for _, catDef in ipairs(pickupCategoryDefs) do
     autoPickupGroup:AddToggle("PickupCat_" .. catDef.key, {
         Text = catDef.text,
         Default = autoPickupCategories[catDef.key] ~= false,
-        Tooltip = "Enable/disable automatic pickup for " .. catDef.text,
+        Tooltip = catDef.text .. " の自動拾得を有効/無効にします",
         Callback = function(state)
             autoPickupCategories[catDef.key] = state
         end,
     })
 end
 
-local repairAuraGroup = Tabs.Exploits:AddRightGroupbox("Repair Aura", "wrench")
+local repairAuraGroup = Tabs.Exploits:AddRightGroupbox("修理オーラ", "wrench")
 
 repairAuraGroup:AddToggle("InstantInteract", {
-    Text = "Instant Interact (Delay Skip)",
+    Text = "インスタントインタラクト（遅延スキップ）",
     Default = false,
-    Tooltip = "Removes hold duration from all ProximityPrompts instantly.",
+    Tooltip = "すべてのProximityPromptの長押し時間を即座になくします。",
     Callback = function(state)
         updateInstantInteract(state)
-        Library:Notify({ Title = "Instant Interact", Description = state and "Enabled - Hold duration removed!" or "Disabled - Original durations restored", Time = 2 })
+        Library:Notify({ Title = "インスタントインタラクト", Description = state and "有効 - 長押し時間が削除されました！" or "無効 - 元の長押し時間が復元されました", Time = 2 })
     end,
 })
 
 repairAuraGroup:AddDivider()
 
 repairAuraGroup:AddToggle("RepairAura", {
-    Text = "Repair Aura",
+    Text = "修理オーラ",
     Default = false,
-    Tooltip = "Automatically repairs structures within range. Repair Hammer must be equipped.",
+    Tooltip = "範囲内の構造物を自動的に修理します。修理ハンマーの装備が必要です。",
     Callback = function(state)
         if state then
             startRepairAura()
-            Library:Notify({ Title = "Repair Aura", Description = "Active", Time = 2 })
+            Library:Notify({ Title = "修理オーラ", Description = "有効化しました", Time = 2 })
         else
             stopRepairAura()
-            Library:Notify({ Title = "Repair Aura", Description = "Stopped", Time = 2 })
+            Library:Notify({ Title = "修理オーラ", Description = "停止しました", Time = 2 })
         end
     end,
 })
 
 repairAuraGroup:AddSlider("RepairAuraRange", {
-    Text = "Range",
+    Text = "範囲",
     Default = 30,
     Min = 5,
     Max = 30,
     Rounding = 0,
-    Suffix = " studs",
-    Tooltip = "Maximum distance to structures that will be repaired.",
+    Suffix = " スタッド",
+    Tooltip = "修理対象となる構造物までの最大距離。",
 })
 
 repairAuraGroup:AddSlider("RepairAuraRate", {
-    Text = "Rate",
+    Text = "頻度",
     Default = 1,
     Min = 1,
     Max = 10,
     Rounding = 0,
-    Suffix = "/s",
-    Tooltip = "How many repair remote fires per second (1 = minimum, 10 = maximum).",
+    Suffix = "/秒",
+    Tooltip = "1秒あたりの修理リモート送信回数（1 = 最小、10 = 最大）。",
 })
 
-repairAuraGroup:AddLabel("Requires: Repair Hammer equipped", { DoesWrap = true })
+repairAuraGroup:AddLabel("必要条件：修理ハンマー装備", { DoesWrap = true })
 
 end
 
 do
-local utilityGroup = Tabs.Misc:AddLeftGroupbox("Utilities", "shield-check")
+local utilityGroup = Tabs.Misc:AddLeftGroupbox("ユーティリティ", "shield-check")
 
 utilityGroup:AddToggle("AntiAFK", {
-    Text = "Anti-AFK",
+    Text = "アンチAFK",
     Default = true,
-    Tooltip = "Prevents the game from kicking you for being idle",
+    Tooltip = "アイドル状態によるキックを防止します。",
     Callback = function(state)
         if state then
             startAntiAFK()
-            Library:Notify({ Title = "Anti-AFK", Description = "Enabled - you won't be kicked for idling", Time = 2 })
+            Library:Notify({ Title = "アンチAFK", Description = "有効 - アイドルキックされません", Time = 2 })
         else
             stopAntiAFK()
-            Library:Notify({ Title = "Anti-AFK", Description = "Disabled", Time = 2 })
+            Library:Notify({ Title = "アンチAFK", Description = "無効", Time = 2 })
         end
     end,
 })
 
 utilityGroup:AddToggle("Fullbright", {
-    Text = "Fullbright",
+    Text = "フルブライト",
     Default = true,
-    Tooltip = "Brightens the game world by modifying lighting properties. Restores originals when disabled.",
+    Tooltip = "ライティングプロパティを変更してゲーム世界を明るくします。",
     Callback = function(state)
         if state then
             enableFullbright()
-            Library:Notify({ Title = "Fullbright", Description = "Enabled", Time = 2 })
+            Library:Notify({ Title = "フルブライト", Description = "有効化しました", Time = 2 })
         else
             disableFullbright()
-            Library:Notify({ Title = "Fullbright", Description = "Disabled - original lighting restored", Time = 2 })
+            Library:Notify({ Title = "フルブライト", Description = "無効 - 元の明るさに戻しました", Time = 2 })
         end
     end,
 })
 
 utilityGroup:AddToggle("RemoveFog", {
-    Text = "Remove Fog",
+    Text = "霧の削除",
     Default = true,
-    Tooltip = "Removes visual fog for clear long-distance visibility. Restores original fog when disabled.",
+    Tooltip = "視界をクリアにするため視覚的な霧を削除します。",
     Callback = function(state)
         if state then
             enableRemoveFog()
-            Library:Notify({ Title = "Remove Fog", Description = "Enabled - fog removed for clear visibility", Time = 2 })
+            Library:Notify({ Title = "霧の削除", Description = "有効 - 視界がクリアになりました", Time = 2 })
         else
             disableRemoveFog()
-            Library:Notify({ Title = "Remove Fog", Description = "Disabled - original fog restored", Time = 2 })
+            Library:Notify({ Title = "霧の削除", Description = "無効 - 元の霧に戻しました", Time = 2 })
         end
     end,
 })
 
-local serverGroup = Tabs.Misc:AddRightGroupbox("Server Tools", "server")
+local serverGroup = Tabs.Misc:AddRightGroupbox("サーバーツール", "server")
 
-serverGroup:AddButton("Server Hop", function()
-    Library:Notify({ Title = "Server Hop", Description = "Finding new server...", Time = 2 })
+serverGroup:AddButton("サーバーホップ", function()
+    Library:Notify({ Title = "サーバーホップ", Description = "新しいサーバーを検索中...", Time = 2 })
     serverHop()
 end)
 
-serverGroup:AddButton("Rejoin Server", function()
-    Library:Notify({ Title = "Rejoin", Description = "Rejoining server...", Time = 2 })
+serverGroup:AddButton("サーバー再参加", function()
+    Library:Notify({ Title = "再参加", Description = "サーバーに再参加中...", Time = 2 })
     rejoinServer()
 end)
 
 serverGroup:AddDivider()
-serverGroup:AddLabel("Current Job ID:")
-serverGroup:AddLabel("JobId", { Text = game.JobId ~= "" and game.JobId:sub(1, 30) .. "..." or "Unknown", DoesWrap = true })
+serverGroup:AddLabel("現在のジョブID：")
+serverGroup:AddLabel("JobId", { Text = game.JobId ~= "" and game.JobId:sub(1, 30) .. "..." or "不明", DoesWrap = true })
 
 end
 
@@ -2438,23 +2436,23 @@ Library:OnUnload(function()
 
     stopAntiAFK()
 
-    Library:Notify({ Title = "Baka Pote", Description = "Unloaded. Bye!", Time = 3 })
+    Library:Notify({ Title = "Baka Pote", Description = "アンロードされました。さようなら！", Time = 3 })
     print("Baka Pote unloaded.")
 end)
 
 do
-local MenuGroup = Tabs["UI Settings"]:AddLeftGroupbox("Menu", "wrench")
+local MenuGroup = Tabs["UI Settings"]:AddLeftGroupbox("メニュー", "wrench")
 
 MenuGroup:AddToggle("KeybindMenuOpen", {
     Default = Library.KeybindFrame.Visible,
-    Text = "Open Keybind Menu",
+    Text = "キーバインドメニューを開く",
     Callback = function(value)
         Library.KeybindFrame.Visible = value
     end,
 })
 
 MenuGroup:AddToggle("ShowCustomCursor", {
-    Text = "Custom Cursor",
+    Text = "カスタムカーソル",
     Default = true,
     Callback = function(Value)
         Library.ShowCustomCursor = Value
@@ -2462,18 +2460,18 @@ MenuGroup:AddToggle("ShowCustomCursor", {
 })
 
 MenuGroup:AddDropdown("NotificationSide", {
-    Values = { "Left", "Right" },
-    Default = "Right",
-    Text = "Notification Side",
+    Values = { "左", "右" },
+    Default = "右",
+    Text = "通知の位置",
     Callback = function(Value)
-        Library:SetNotifySide(Value)
+        Library:SetNotifySide(Value == "左" and "Left" or "Right")
     end,
 })
 
 MenuGroup:AddDropdown("DPIDropdown", {
     Values = { "50%", "75%", "100%", "125%", "150%", "175%", "200%" },
     Default = "100%",
-    Text = "DPI Scale",
+    Text = "DPIスケール",
     Callback = function(Value)
         Value = Value:gsub("%%", "")
         local DPI = tonumber(Value)
@@ -2482,7 +2480,7 @@ MenuGroup:AddDropdown("DPIDropdown", {
 })
 
 MenuGroup:AddSlider("UICornerSlider", {
-    Text = "Corner Radius",
+    Text = "角の丸み",
     Default = Library.CornerRadius,
     Min = 0,
     Max = 20,
@@ -2493,8 +2491,8 @@ MenuGroup:AddSlider("UICornerSlider", {
 })
 
 MenuGroup:AddDivider()
-MenuGroup:AddLabel("Menu bind")
-    :AddKeyPicker("MenuKeybind", { Default = "RightShift", NoUI = true, Text = "Menu keybind" })
+MenuGroup:AddLabel("メニューバインド")
+    :AddKeyPicker("MenuKeybind", { Default = "RightShift", NoUI = true, Text = "メニューキーバインド" })
 
 end
 
@@ -2543,7 +2541,7 @@ for _, sys in pairs(espSystems) do
     if sys.vars.ESP then sys.refresh() end
 end
 
-Library:Notify({ Title = "Baka Pote", Description = "Loaded! Gun|Melee|Medical|Armor|Food|Resources\nRight Shift = toggle menu.", Time = 5 })
+Library:Notify({ Title = "Baka Pote", Description = "ロード完了！銃|近接|医療|防具|食料|資源\n右Shift = メニュー切り替え", Time = 5 })
 
 local espCounts = { Gun="Red", Melee="Orange", Medical="Green", Armor="Blue", Food="Lime", Resource="Silver" }
 print("Baka Pote loaded | " .. #itemNames .. " items tracked | Right Shift = menu")
