@@ -22,6 +22,15 @@ local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/deivi
 local ThemeManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/addons/ThemeManager.lua"))()
 local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/addons/SaveManager.lua"))()
 
+pcall(function()
+    if Library.ToggleKeybindFrame then
+        Library.ToggleKeybindFrame.Size = UDim2.new(0, 100, 0, 25)
+    end
+    if Library.UnloadButton then
+        Library.UnloadButton:Destroy()
+    end
+end)
+
 local Options = Library.Options
 local Toggles = Library.Toggles
 
@@ -2502,6 +2511,23 @@ SaveManager:SetFolder("SPYMM/survive-the-apocalypse")
 SaveManager:BuildConfigSection(Tabs["UI Settings"])
 ThemeManager:ApplyToTab(Tabs["UI Settings"])
 SaveManager:LoadAutoloadConfig()
+
+pcall(function()
+    local coreGui = game:GetService("CoreGui")
+    local screenGui = coreGui:FindFirstChildWhichIsA("ScreenGui")
+    if screenGui then
+        for _, desc in ipairs(screenGui:GetDescendants()) do
+            if desc:IsA("TextButton") or desc:IsA("ImageButton") then
+                local text = (desc.Text or ""):lower()
+                if text:find("lock") then
+                    desc.Visible = false
+                elseif text:find("toggle") or desc.Size.X.Offset < 100 and desc.Size.Y.Offset < 50 then
+                    desc.Size = UDim2.new(0, 35, 0, 35)
+                end
+            end
+        end
+    end
+end)
 
 if Toggles.KillAura and Toggles.KillAura.Value then startKillAura() end
 if Toggles.AutoPickup and Toggles.AutoPickup.Value then startAutoPickup() end
