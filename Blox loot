@@ -1,6 +1,7 @@
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -14,6 +15,8 @@ local antiVoid = true
 local espActive = false
 local autoSwingActive = false
 local speed40Active = true
+local killAuraActive = false
+local killAuraConnection = nil
 local espObjects = {}
 local selectedPlayersESP = {}
 local allPlayerOn = false
@@ -30,6 +33,19 @@ local function applyButtonStyle(button)
     stroke.Color = Color3.fromRGB(58,58,58)
     stroke.Thickness = 1
     stroke.Parent = button
+end
+
+local function formatHP(hp)
+    if hp < 1000 then
+        return tostring(math.floor(hp))
+    end
+    local suffixes = {"", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc", "UDc", "DDc", "TDc", "QaDc", "QiDc", "SxDc", "SpDc", "OcDc", "NoDc", "Vg", "UVg", "DVg", "TVg", "QaVg", "QiVg", "SxVg", "SpVg", "OcVg", "NoVg", "Tg", "UTg", "DTg", "TTg", "QaTg", "QiTg", "SxTg", "SpTg", "OcTg", "NoTg", "Qd", "UQd", "DQd", "TQd", "QaQd", "QiQd", "SxQd", "SpQd", "OcQd", "NoQd", "Qt", "UQt", "DQt", "TQt", "QaQt", "QiQt", "SxQt", "SpQt", "OcQt", "NoQt", "Se", "USe", "DSe", "TSe", "QaSe", "QiSe", "SxSe", "SpSe", "OcSe", "NoSe", "St", "USt", "DSt", "TSt", "QaSt", "QiSt", "SxSt", "SpSt", "OcSt", "NoSt", "Og", "UOg", "DOg", "TOg", "QaOg", "QiOg", "SxOg", "SpOg", "OcOg", "NoOg", "Nn", "UNn", "DNn", "TNn", "QaNn", "QiNn", "SxNn", "SpNn", "OcNn", "NoNn", "Ce"}
+    local i = math.floor(math.log10(hp) / 3)
+    if i > #suffixes then
+        i = #suffixes
+    end
+    local val = hp / (10 ^ (i * 3))
+    return string.format("%.1f%s", val, suffixes[i + 1])
 end
 
 local gui = Instance.new("ScreenGui")
@@ -84,7 +100,7 @@ btnContainer.Position = UDim2.new(0,4,0,25)
 btnContainer.BackgroundTransparency = 1
 btnContainer.ScrollBarThickness = 2
 btnContainer.ScrollBarImageColor3 = Color3.fromRGB(85,85,85)
-btnContainer.CanvasSize = UDim2.new(0,0,0,152)
+btnContainer.CanvasSize = UDim2.new(0,0,0,182)
 btnContainer.BorderSizePixel = 0
 local btnLayout = Instance.new("UIListLayout")
 btnLayout.Parent = btnContainer
@@ -109,6 +125,7 @@ local espToggleBtn = createMenuBtn("ESP : OFF", btnContainer)
 local autoSwingBtn = createMenuBtn("Auto Swing : OFF", btnContainer)
 local speed40Btn = createMenuBtn("Speed 40 : ON", btnContainer)
 speed40Btn.BackgroundColor3 = Color3.fromRGB(38,55,38)
+local killAuraBtn = createMenuBtn("Kill Aura : OFF", btnContainer)
 local tpHomeBtn = createMenuBtn("TP Home", btnContainer)
 
 local espListGui = Instance.new("Frame")
@@ -271,7 +288,7 @@ local function createESP(plr)
 
                 local hp = math.floor(humanoid.Health)  
 
-                textLabel.Text = "hp:"..hp  
+                textLabel.Text = "hp:"..formatHP(hp)  
 
                 if hp >= 65 then  
                     textLabel.TextColor3 = Color3.fromRGB(0,255,0)  
@@ -406,6 +423,26 @@ speed40Btn.MouseButton1Click:Connect(function()
     speed40Active = not speed40Active
     speed40Btn.Text = speed40Active and "Speed 40 : ON" or "Speed 40 : OFF"
     speed40Btn.BackgroundColor3 = speed40Active and Color3.fromRGB(38,55,38) or Color3.fromRGB(46,46,46)
+end)
+
+killAuraBtn.MouseButton1Click:Connect(function()
+    killAuraActive = not killAuraActive
+    killAuraBtn.Text = killAuraActive and "Kill Aura : ON" or "Kill Aura : OFF"
+    killAuraBtn.BackgroundColor3 = killAuraActive and Color3.fromRGB(38,55,38) or Color3.fromRGB(46,46,46)
+    if killAuraActive then
+        killAuraConnection = RunService.Heartbeat:Connect(function()
+            if killAuraActive then
+                pcall(function()
+                    ReplicatedStorage.Runtime.Actors.Tool_Character_11657099408_1_1.Functions.Attack:InvokeServer()
+                end)
+            end
+        end)
+    else
+        if killAuraConnection then
+            killAuraConnection:Disconnect()
+            killAuraConnection = nil
+        end
+    end
 end)
 
 tpHomeBtn.MouseButton1Click:Connect(function()
