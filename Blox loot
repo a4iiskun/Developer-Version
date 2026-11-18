@@ -419,23 +419,13 @@ local function RefreshEvent()
     end
 
     local Prefix = "Tool_Character_" .. player.UserId .. "_"
-    local PreferredCharacter = Actors:FindFirstChild(Prefix .. "1_1")
-
-    if PreferredCharacter then
-        local Functions = PreferredCharacter:FindFirstChild("Functions")
-        Event = Functions and Functions:FindFirstChild("Attack")
-
-        if Event then
-            return
-        end
-    end
 
     for _, Character in ipairs(Actors:GetChildren()) do
-        if Character ~= PreferredCharacter and string.sub(Character.Name, 1, #Prefix) == Prefix then
+        if string.sub(Character.Name, 1, #Prefix) == Prefix then
             local Functions = Character:FindFirstChild("Functions")
             local Attack = Functions and Functions:FindFirstChild("Attack")
 
-            if Attack then
+            if Attack and Attack.Parent then
                 Event = Attack
                 return
             end
@@ -511,7 +501,7 @@ end)
 
 speed40Btn.MouseButton1Click:Connect(function()
     speed40Active = not speed40Active
-    speed40Btn.Text = speed40Active and "Speed 40 : ON" or "Speed 40 : OFF"
+    speed40ActiveBtn.Text = speed40Active and "Speed 40 : ON" or "Speed 40 : OFF"
     speed40Btn.BackgroundColor3 = speed40Active and Color3.fromRGB(38,55,38) or Color3.fromRGB(46,46,46)
 end)
 
