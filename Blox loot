@@ -16,10 +16,14 @@ local espActive = false
 local autoSwingActive = false
 local speed40Active = true
 local killAuraActive = false
-local killAuraConnection = nil
 local espObjects = {}
 local selectedPlayersESP = {}
 local allPlayerOn = false
+
+local Event = nil
+local LoopVersion = 0
+local WatchedActors = nil
+local RestartAttackLoop
 
 local function applyButtonStyle(button)
     button.BorderSizePixel = 0
@@ -388,6 +392,92 @@ local function createESPPlayerButton(plr)
     end)
 end
 
+local function RefreshEvent()
+    Event = nil
+
+    local Runtime = ReplicatedStorage:FindFirstChild("Runtime")
+    local Actors = Runtime and Runtime:FindFirstChild("Actors")
+
+    if not Actors then
+        return
+    end
+
+    if WatchedActors ~= Actors then
+        WatchedActors = Actors
+
+        Actors.ChildAdded:Connect(function()
+            if killAuraActive then
+                RestartAttackLoop()
+            end
+        end)
+
+        Actors.ChildRemoved:Connect(function()
+            if killAuraActive then
+                RestartAttackLoop()
+            end
+        end)
+    end
+
+    local Prefix = "Tool_Character_" .. player.UserId .. "_"
+    local PreferredCharacter = Actors:FindFirstChild(Prefix .. "1_1")
+
+    if PreferredCharacter then
+        local Functions = PreferredCharacter:FindFirstChild("Functions")
+        Event = Functions and Functions:FindFirstChild("Attack")
+
+        if Event then
+            return
+        end
+    end
+
+    for _, Character in ipairs(Actors:GetChildren()) do
+        if Character ~= PreferredCharacter and string.sub(Character.Name, 1, #Prefix) == Prefix then
+            local Functions = Character:FindFirstChild("Functions")
+            local Attack = Functions and Functions:FindFirstChild("Attack")
+
+            if Attack then
+                Event = Attack
+                return
+            end
+        end
+    end
+end
+
+RestartAttackLoop = function()
+    LoopVersion = LoopVersion + 1
+
+    if not killAuraActive then
+        return
+    end
+
+    local CurrentVersion = LoopVersion
+
+    task.spawn(function()
+        local InFlight = false
+
+        while killAuraActive and LoopVersion == CurrentVersion do
+            RefreshEvent()
+
+            if Event and not InFlight then
+                local CurrentEvent = Event
+                InFlight = true
+
+                task.spawn(function()
+                    pcall(function()
+                        CurrentEvent:InvokeServer()
+                    end)
+
+                    if LoopVersion == CurrentVersion then
+                        InFlight = false
+                    end
+                end)
+            end
+
+            task.wait(0.05)
+        end
+    end)
+end
+
 respawnBtn.MouseButton1Click:Connect(function()
     local char = player.Character
     if not char then return end
@@ -429,19 +519,12 @@ killAuraBtn.MouseButton1Click:Connect(function()
     killAuraActive = not killAuraActive
     killAuraBtn.Text = killAuraActive and "Kill Aura : ON" or "Kill Aura : OFF"
     killAuraBtn.BackgroundColor3 = killAuraActive and Color3.fromRGB(38,55,38) or Color3.fromRGB(46,46,46)
+
     if killAuraActive then
-        killAuraConnection = RunService.Heartbeat:Connect(function()
-            if killAuraActive then
-                pcall(function()
-                    ReplicatedStorage.Runtime.Actors.Tool_Character_11657099408_1_1.Functions.Attack:InvokeServer()
-                end)
-            end
-        end)
+        RestartAttackLoop()
     else
-        if killAuraConnection then
-            killAuraConnection:Disconnect()
-            killAuraConnection = nil
-        end
+        LoopVersion = LoopVersion + 1
+        Event = nil
     end
 end)
 
@@ -491,6 +574,10 @@ player.CharacterAdded:Connect(function(char)
             root.CFrame = CFrame.new(savedPosition)
             task.wait()
         end
+    end
+
+    if killAuraActive then
+        RestartAttackLoop()
     end
 end)
 
