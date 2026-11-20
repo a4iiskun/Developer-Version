@@ -2,12 +2,15 @@ local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
+local CollectionService = game:GetService("CollectionService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
 if playerGui:FindFirstChild("BattleScriptGUI") then
-    playerGui.BattleScriptGUI:Destroy()
+playerGui.BattleScriptGUI:Destroy()
 end
 
 local savedPosition = nil
@@ -16,6 +19,7 @@ local espActive = false
 local autoSwingActive = false
 local speed40Active = true
 local killAuraActive = false
+local autoFarmActive = false
 local espObjects = {}
 local selectedPlayersESP = {}
 local allPlayerOn = false
@@ -25,31 +29,59 @@ local LoopVersion = 0
 local WatchedActors = nil
 local RestartAttackLoop
 
+local OriginalCanCollide = {}
+local CurrentMover = nil
+local AnchorPosition = nil
+local RangeVisualModel = nil
+local MAX_ENEMY_RADIUS = 100
+
+local BLOCKED_TAGS = {
+NPC = true,
+Shop = true,
+Vendor = true,
+Quest = true,
+Friendly = true,
+Civilian = true,
+Ally = true,
+}
+
+local BLOCKED_ANCESTOR_NAMES = {
+NPC = true,
+NPCs = true,
+Shop = true,
+Shops = true,
+Vendor = true,
+Vendors = true,
+Lobby = true,
+Quest = true,
+Quests = true,
+}
+
 local function applyButtonStyle(button)
-    button.BorderSizePixel = 0
-    button.AutoButtonColor = false
-    button.Font = Enum.Font.GothamMedium
-    button.TextColor3 = Color3.fromRGB(235,235,235)
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0,3)
-    corner.Parent = button
-    local stroke = Instance.new("UIStroke")
-    stroke.Color = Color3.fromRGB(58,58,58)
-    stroke.Thickness = 1
-    stroke.Parent = button
+button.BorderSizePixel = 0
+button.AutoButtonColor = false
+button.Font = Enum.Font.GothamMedium
+button.TextColor3 = Color3.fromRGB(235,235,235)
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0,3)
+corner.Parent = button
+local stroke = Instance.new("UIStroke")
+stroke.Color = Color3.fromRGB(58,58,58)
+stroke.Thickness = 1
+stroke.Parent = button
 end
 
 local function formatHP(hp)
-    if hp < 1000 then
-        return tostring(math.floor(hp))
-    end
-    local suffixes = {"", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc", "UDc", "DDc", "TDc", "QaDc", "QiDc", "SxDc", "SpDc", "OcDc", "NoDc", "Vg", "UVg", "DVg", "TVg", "QaVg", "QiVg", "SxVg", "SpVg", "OcVg", "NoVg", "Tg", "UTg", "DTg", "TTg", "QaTg", "QiTg", "SxTg", "SpTg", "OcTg", "NoTg", "Qd", "UQd", "DQd", "TQd", "QaQd", "QiQd", "SxQd", "SpQd", "OcQd", "NoQd", "Qt", "UQt", "DQt", "TQt", "QaQt", "QiQt", "SxQt", "SpQt", "OcQt", "NoQt", "Se", "USe", "DSe", "TSe", "QaSe", "QiSe", "SxSe", "SpSe", "OcSe", "NoSe", "St", "USt", "DSt", "TSt", "QaSt", "QiSt", "SxSt", "SpSt", "OcSt", "NoSt", "Og", "UOg", "DOg", "TOg", "QaOg", "QiOg", "SxOg", "SpOg", "OcOg", "NoOg", "Nn", "UNn", "DNn", "TNn", "QaNn", "QiNn", "SxNn", "SpNn", "OcNn", "NoNn", "Ce"}
-    local i = math.floor(math.log10(hp) / 3)
-    if i > #suffixes then
-        i = #suffixes
-    end
-    local val = hp / (10 ^ (i * 3))
-    return string.format("%.1f%s", val, suffixes[i + 1])
+if hp < 1000 then
+return tostring(math.floor(hp))
+end
+local suffixes = {"", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc", "UDc", "DDc", "TDc", "QaDc", "QiDc", "SxDc", "SpDc", "OcDc", "NoDc", "Vg", "UVg", "DVg", "TVg", "QaVg", "QiVg", "SxVg", "SpVg", "OcVg", "NoVg", "Tg", "UTg", "DTg", "TTg", "QaTg", "QiTg", "SxTg", "SpTg", "OcTg", "NoTg", "Qd", "UQd", "DQd", "TQd", "QaQd", "QiQd", "SxQd", "SpQd", "OcQd", "NoQd", "Qt", "UQt", "DQt", "TQt", "QaQt", "QiQt", "SxQt", "SpQt", "OcQt", "NoQt", "Se", "USe", "DSe", "TSe", "QaSe", "QiSe", "SxSe", "SpSe", "OcSe", "NoSe", "St", "USt", "DSt", "TSt", "QaSt", "QiSt", "SxSt", "SpSt", "OcSt", "NoSt", "Og", "UOg", "DOg", "TOg", "QaOg", "QiOg", "SxOg", "SpOg", "OcOg", "NoOg", "Nn", "UNn", "DNn", "TNn", "QaNn", "QiNn", "SxNn", "SpNn", "OcNn", "NoNn", "Ce"}
+local i = math.floor(math.log10(hp) / 3)
+if i > #suffixes then
+i = #suffixes
+end
+local val = hp / (10 ^ (i * 3))
+return string.format("%.1f%s", val, suffixes[i + 1])
 end
 
 local gui = Instance.new("ScreenGui")
@@ -91,7 +123,7 @@ local title = Instance.new("TextLabel")
 title.Parent = frame
 title.Size = UDim2.new(1,0,0,25)
 title.BackgroundTransparency = 1
-title.Text = "ETW BATTLE"
+title.Text = "Blox Loot"
 title.TextColor3 = Color3.fromRGB(255,255,255)
 title.TextSize = 11
 title.Font = Enum.Font.GothamBold
@@ -104,33 +136,36 @@ btnContainer.Position = UDim2.new(0,4,0,25)
 btnContainer.BackgroundTransparency = 1
 btnContainer.ScrollBarThickness = 2
 btnContainer.ScrollBarImageColor3 = Color3.fromRGB(85,85,85)
-btnContainer.CanvasSize = UDim2.new(0,0,0,182)
+btnContainer.CanvasSize = UDim2.new(0,0,0,208)
 btnContainer.BorderSizePixel = 0
 local btnLayout = Instance.new("UIListLayout")
 btnLayout.Parent = btnContainer
 btnLayout.Padding = UDim.new(0,4)
 btnLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+btnLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
-local function createMenuBtn(text, parent)
-    local b = Instance.new("TextButton")
-    b.Size = UDim2.new(1,-4,0,22)
-    b.Text = text
-    b.BackgroundColor3 = Color3.fromRGB(46,46,46)
-    b.TextSize = 9
-    b.Parent = parent
-    applyButtonStyle(b)
-    return b
+local function createMenuBtn(text, parent, layoutOrder)
+local b = Instance.new("TextButton")
+b.Size = UDim2.new(1,-4,0,22)
+b.Text = text
+b.BackgroundColor3 = Color3.fromRGB(46,46,46)
+b.TextSize = 9
+b.LayoutOrder = layoutOrder
+b.Parent = parent
+applyButtonStyle(b)
+return b
 end
 
-local respawnBtn = createMenuBtn("Set Respawn", btnContainer)
-local antiVoidBtn = createMenuBtn("Anti Void : ON", btnContainer)
+local killAuraBtn = createMenuBtn("Kill Aura : OFF", btnContainer, 1)
+local autoSwingBtn = createMenuBtn("Auto Swing : OFF", btnContainer, 2)
+local espToggleBtn = createMenuBtn("ESP : OFF", btnContainer, 3)
+local respawnBtn = createMenuBtn("Set Respawn", btnContainer, 4)
+local tpHomeBtn = createMenuBtn("TP Home", btnContainer, 5)
+local antiVoidBtn = createMenuBtn("Anti Void : ON", btnContainer, 6)
 antiVoidBtn.BackgroundColor3 = Color3.fromRGB(38,55,38)
-local espToggleBtn = createMenuBtn("ESP : OFF", btnContainer)
-local autoSwingBtn = createMenuBtn("Auto Swing : OFF", btnContainer)
-local speed40Btn = createMenuBtn("Speed 40 : ON", btnContainer)
+local speed40Btn = createMenuBtn("Speed 40 : ON", btnContainer, 7)
 speed40Btn.BackgroundColor3 = Color3.fromRGB(38,55,38)
-local killAuraBtn = createMenuBtn("Kill Aura : OFF", btnContainer)
-local tpHomeBtn = createMenuBtn("TP Home", btnContainer)
+local autoFarmBtn = createMenuBtn("Auto Farm : OFF", btnContainer, 8)
 
 local espListGui = Instance.new("Frame")
 espListGui.Parent = gui
@@ -168,8 +203,8 @@ espLayout.Padding = UDim.new(0,2)
 espLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
 espLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-    espListFrame.CanvasSize = UDim2.new(0,0,0,espLayout.AbsoluteContentSize.Y)
-    espListGui.Size = UDim2.new(0,104,0,math.min(espLayout.AbsoluteContentSize.Y+6,120))
+espListFrame.CanvasSize = UDim2.new(0,0,0,espLayout.AbsoluteContentSize.Y)
+espListGui.Size = UDim2.new(0,104,0,math.min(espLayout.AbsoluteContentSize.Y+6,120))
 end)
 
 local systemMessage = Instance.new("Frame")
@@ -219,112 +254,434 @@ subTextLeft.TextXAlignment = Enum.TextXAlignment.Left
 subTextLeft.ZIndex = 61
 
 local tween = TweenService:Create(
-    systemMessage,
-    TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-    {Position = UDim2.new(1, -20, 1, -20)}
+systemMessage,
+TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+{Position = UDim2.new(1, -20, 1, -20)}
 )
 tween:Play()
 
 task.delay(4, function()
-    local tweenOut = TweenService:Create(
-        systemMessage,
-        TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.In),
-        {Position = UDim2.new(1, 400, 1, -20)}
-    )
-    tweenOut:Play()
+local tweenOut = TweenService:Create(
+systemMessage,
+TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.In),
+{Position = UDim2.new(1, 400, 1, -20)}
+)
+tweenOut:Play()
 end)
 
+local function ClearRangeVisual()
+if RangeVisualModel then
+RangeVisualModel:Destroy()
+RangeVisualModel = nil
+end
+end
+
+local function ShowRangeVisual(Position)
+ClearRangeVisual()
+if not Position then
+return
+end
+
+local Model = Instance.new("Model")
+Model.Name = "ChickenFollowRangeVisualModel"
+Model.Parent = workspace
+
+local SpherePart = Instance.new("Part")
+SpherePart.Name = "ChickenFollowRangeSphere"
+SpherePart.Shape = Enum.PartType.Ball
+SpherePart.Material = Enum.Material.ForceField
+SpherePart.Color = Color3.fromRGB(255, 0, 0)
+SpherePart.Transparency = 0.95
+SpherePart.CastShadow = false
+SpherePart.Anchored = true
+SpherePart.CanCollide = false
+SpherePart.CanQuery = false
+SpherePart.CanTouch = false
+SpherePart.Size = Vector3.new(MAX_ENEMY_RADIUS * 2, MAX_ENEMY_RADIUS * 2, MAX_ENEMY_RADIUS * 2)
+SpherePart.CFrame = CFrame.new(Position)
+SpherePart.Parent = Model
+
+local SphereHighlight = Instance.new("Highlight")
+SphereHighlight.Name = "ChickenFollowRangeHighlight"
+SphereHighlight.Adornee = SpherePart
+SphereHighlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+SphereHighlight.FillColor = Color3.fromRGB(255, 0, 0)
+SphereHighlight.FillTransparency = 0.88
+SphereHighlight.OutlineColor = Color3.fromRGB(255, 40, 40)
+SphereHighlight.OutlineTransparency = 0.1
+SphereHighlight.Parent = Model
+
+local SphereAdornment = Instance.new("SphereHandleAdornment")
+SphereAdornment.Name = "ChickenFollowRangeAdornment"
+SphereAdornment.Adornee = SpherePart
+SphereAdornment.Radius = MAX_ENEMY_RADIUS
+SphereAdornment.Color3 = Color3.fromRGB(255, 0, 0)
+SphereAdornment.Transparency = 0.65
+SphereAdornment.AlwaysOnTop = true
+SphereAdornment.ZIndex = 10
+SphereAdornment.Parent = Model
+
+local function CreateRing(Axis1, Axis2)
+local SegmentCount = 48
+local Thickness = 0.35
+
+for Index = 1, SegmentCount do
+local Angle1 = (Index - 1) * math.pi * 2 / SegmentCount
+local Angle2 = Index * math.pi * 2 / SegmentCount
+
+local Point1 = Position
+- Axis1 * (math.cos(Angle1) * MAX_ENEMY_RADIUS)
+- Axis2 * (math.sin(Angle1) * MAX_ENEMY_RADIUS)
+
+local Point2 = Position
+- Axis1 * (math.cos(Angle2) * MAX_ENEMY_RADIUS)
+- Axis2 * (math.sin(Angle2) * MAX_ENEMY_RADIUS)
+
+local Difference = Point2 - Point1
+local Distance = Difference.Magnitude
+
+local Segment = Instance.new("Part")
+Segment.Name = "ChickenFollowRangeLine"
+Segment.Shape = Enum.PartType.Cylinder
+Segment.Material = Enum.Material.Neon
+Segment.Color = Color3.fromRGB(255, 0, 0)
+Segment.Transparency = 0
+Segment.Size = Vector3.new(Distance + 0.15, Thickness, Thickness)
+Segment.CFrame = CFrame.lookAt((Point1 + Point2) / 2, Point2) * CFrame.Angles(0, math.pi / 2, 0)
+Segment.Anchored = true
+Segment.CanCollide = false
+Segment.CanQuery = false
+Segment.CanTouch = false
+Segment.CastShadow = false
+Segment.Parent = Model
+end
+end
+
+CreateRing(Vector3.new(1, 0, 0), Vector3.new(0, 1, 0))
+CreateRing(Vector3.new(1, 0, 0), Vector3.new(0, 0, 1))
+CreateRing(Vector3.new(0, 1, 0), Vector3.new(0, 0, 1))
+
+RangeVisualModel = Model
+end
+
+local function EnableNoclip()
+local Character = player.Character
+if not Character then
+return
+end
+
+for _, Part in ipairs(Character:GetDescendants()) do
+if Part:IsA("BasePart") then
+if OriginalCanCollide[Part] == nil then
+OriginalCanCollide[Part] = Part.CanCollide
+end
+
+Part.CanCollide = false
+end
+end
+end
+
+local function DisableNoclip()
+for Part, OriginalValue in pairs(OriginalCanCollide) do
+if Part and Part.Parent then
+Part.CanCollide = OriginalValue
+end
+end
+
+table.clear(OriginalCanCollide)
+end
+
+local function GetRoot(Model)
+return Model:FindFirstChild("HumanoidRootPart")
+or Model.PrimaryPart
+or Model:FindFirstChildWhichIsA("BasePart", true)
+end
+
+local function GetObjectPositionPart(Object)
+if Object:IsA("BasePart") then
+return Object
+elseif Object:IsA("Model") then
+return Object.PrimaryPart or Object:FindFirstChildWhichIsA("BasePart", true)
+elseif Object:IsA("Tool") then
+return Object:FindFirstChild("Handle") or Object:FindFirstChildWhichIsA("BasePart", true)
+elseif Object:IsA("Attachment") and Object.Parent and Object.Parent:IsA("BasePart") then
+return Object.Parent
+end
+
+return nil
+end
+
+local function IsPlayerCharacter(Model)
+for _, TargetPlayer in ipairs(Players:GetPlayers()) do
+if TargetPlayer.Character == Model then
+return true
+end
+end
+
+return false
+end
+
+local function IsAttackableMonster(Model, Humanoid)
+if not Model or not Humanoid or Humanoid.Health <= 0 then
+return false
+end
+
+if Humanoid.DisplayDistanceType == Enum.HumanoidDisplayDistanceType.None then
+return false
+end
+
+for _, Tag in ipairs(CollectionService:GetTags(Model)) do
+if BLOCKED_TAGS[Tag] then
+return false
+end
+end
+
+local Ancestor = Model.Parent
+while Ancestor and Ancestor ~= workspace do
+if BLOCKED_ANCESTOR_NAMES[Ancestor.Name] then
+return false
+end
+Ancestor = Ancestor.Parent
+end
+
+return true
+end
+
+local function IsNpcOrBossRune(Object)
+local LowerName = string.lower(Object.Name)
+if LowerName == "boss rune" or string.find(LowerName, "boss rune", 1, true) then
+return true
+end
+
+local Model = Object:IsA("Model") and Object or Object:FindFirstAncestorOfClass("Model")
+if Model then
+local ModelLowerName = string.lower(Model.Name)
+if ModelLowerName == "boss rune" or string.find(ModelLowerName, "boss rune", 1, true) then
+return true
+end
+if Model:FindFirstChildOfClass("Humanoid") then
+return true
+end
+end
+
+if Object:FindFirstChildOfClass("Humanoid") then
+return true
+end
+
+return false
+end
+
+local function IsWithinAnchorRadius(Position)
+if not AnchorPosition or not Position then
+return false
+end
+
+return (Position - AnchorPosition).Magnitude <= MAX_ENEMY_RADIUS
+end
+
+local function FindRuneFragment()
+local Character = player.Character
+local Root = Character and Character:FindFirstChild("HumanoidRootPart")
+
+if not Root or not AnchorPosition then
+return nil
+end
+
+local Nearest = nil
+local ShortestDistance = math.huge
+
+for _, Object in ipairs(workspace:GetDescendants()) do
+if string.find(string.lower(Object.Name), "rune", 1, true) then
+if Character and not Object:IsDescendantOf(Character) and not IsNpcOrBossRune(Object) then
+local TargetPart = GetObjectPositionPart(Object)
+
+if TargetPart and IsWithinAnchorRadius(TargetPart.Position) then
+local Distance = (Root.Position - TargetPart.Position).Magnitude
+
+if Distance < ShortestDistance then
+ShortestDistance = Distance
+Nearest = TargetPart
+end
+end
+end
+end
+end
+
+return Nearest
+end
+
+local function FindMonster()
+local Character = player.Character
+local Root = Character and Character:FindFirstChild("HumanoidRootPart")
+
+if not Root or not AnchorPosition then
+return nil
+end
+
+local Nearest = nil
+local ShortestDistance = math.huge
+
+for _, Object in ipairs(workspace:GetDescendants()) do
+if Object:IsA("Model") and Object ~= Character and not IsPlayerCharacter(Object) then
+local Humanoid = Object:FindFirstChildOfClass("Humanoid")
+local TargetRoot = GetRoot(Object)
+
+if IsAttackableMonster(Object, Humanoid) and TargetRoot and IsWithinAnchorRadius(TargetRoot.Position) then
+local Distance = (Root.Position - TargetRoot.Position).Magnitude
+
+if Distance < ShortestDistance then
+ShortestDistance = Distance
+Nearest = TargetRoot
+end
+end
+end
+end
+
+return Nearest
+end
+
+local function FindPriorityTarget()
+local RuneTarget = FindRuneFragment()
+if RuneTarget then
+return RuneTarget, true
+end
+
+return FindMonster(), false
+end
+
+local function PressKeyE()
+VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+task.delay(0.03, function()
+VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+end)
+end
+
+local function StopFollowing()
+if CurrentMover then
+CurrentMover:Destroy()
+CurrentMover = nil
+end
+
+local Character = player.Character
+local Humanoid = Character and Character:FindFirstChild("Humanoid")
+local Root = Character and Character:FindFirstChild("HumanoidRootPart")
+
+if Humanoid and Root then
+Humanoid:MoveTo(Root.Position)
+end
+end
+
+local function SetAutoFarmEnabled(Value)
+autoFarmActive = Value
+
+autoFarmBtn.Text = autoFarmActive and "Auto Farm : ON" or "Auto Farm : OFF"
+autoFarmBtn.BackgroundColor3 = autoFarmActive and Color3.fromRGB(38,55,38) or Color3.fromRGB(46,46,46)
+
+if autoFarmActive then
+local Character = player.Character
+local Root = Character and Character:FindFirstChild("HumanoidRootPart")
+AnchorPosition = Root and Root.Position or nil
+ShowRangeVisual(AnchorPosition)
+EnableNoclip()
+else
+AnchorPosition = nil
+ClearRangeVisual()
+DisableNoclip()
+StopFollowing()
+end
+end
+
 local function removeESP(plr)
-    if espObjects[plr] then
-        if espObjects[plr].highlight then
-            espObjects[plr].highlight:Destroy()
-        end
-        if espObjects[plr].billboard then  
-            espObjects[plr].billboard:Destroy()  
-        end  
-        if espObjects[plr].connection then  
-            espObjects[plr].connection:Disconnect()  
-        end  
-        espObjects[plr] = nil  
-    end
+if espObjects[plr] then
+if espObjects[plr].highlight then
+espObjects[plr].highlight:Destroy()
+end
+if espObjects[plr].billboard then
+espObjects[plr].billboard:Destroy()
+end
+if espObjects[plr].connection then
+espObjects[plr].connection:Disconnect()
+end
+espObjects[plr] = nil
+end
 end
 
 local function createESP(plr)
-    if plr == player then return end
-    if not selectedPlayersESP[plr] then return end
+if plr == player then return end
+if not selectedPlayersESP[plr] then return end
 
-    local function apply(character)  
-        removeESP(plr)  
+local function apply(character)
+removeESP(plr)
 
-        local highlight = Instance.new("Highlight")  
-        highlight.FillColor = Color3.fromRGB(255,0,0)  
-        highlight.OutlineColor = Color3.fromRGB(255,255,255)  
-        highlight.FillTransparency = 0.45  
-        highlight.Parent = character  
+local highlight = Instance.new("Highlight")
+highlight.FillColor = Color3.fromRGB(255,0,0)
+highlight.OutlineColor = Color3.fromRGB(255,255,255)
+highlight.FillTransparency = 0.45
+highlight.Parent = character
 
-        local head = character:FindFirstChild("Head")  
-        local humanoid = character:FindFirstChildOfClass("Humanoid")  
+local head = character:FindFirstChild("Head")
+local humanoid = character:FindFirstChildOfClass("Humanoid")
 
-        if head and humanoid then  
-            local bill = Instance.new("BillboardGui")  
-            bill.Size = UDim2.new(0,48,0,24)  
-            bill.AlwaysOnTop = true  
-            bill.Parent = head  
+if head and humanoid then
+local bill = Instance.new("BillboardGui")
+bill.Size = UDim2.new(0,48,0,24)
+bill.AlwaysOnTop = true
+bill.Parent = head
 
-            local textLabel = Instance.new("TextLabel")  
-            textLabel.Size = UDim2.new(0,32,0,24)  
-            textLabel.Position = UDim2.new(0,8,0,0)  
-            textLabel.BackgroundTransparency = 1  
-            textLabel.TextColor3 = Color3.fromRGB(255,255,255)  
-            textLabel.TextStrokeTransparency = 0  
-            textLabel.Font = Enum.Font.GothamBold  
-            textLabel.Parent = bill  
+local textLabel = Instance.new("TextLabel")
+textLabel.Size = UDim2.new(0,32,0,24)
+textLabel.Position = UDim2.new(0,8,0,0)
+textLabel.BackgroundTransparency = 1
+textLabel.TextColor3 = Color3.fromRGB(255,255,255)
+textLabel.TextStrokeTransparency = 0
+textLabel.Font = Enum.Font.GothamBold
+textLabel.Parent = bill
 
-            local conn = RunService.RenderStepped:Connect(function()  
-                if not selectedPlayersESP[plr] then return end  
+local conn = RunService.RenderStepped:Connect(function()
+if not selectedPlayersESP[plr] then return end
 
-                local root = character:FindFirstChild("HumanoidRootPart")  
+local root = character:FindFirstChild("HumanoidRootPart")
 
-                if root then  
-                    local ratio = root.Size.Y / 350  
-                    textLabel.TextSize = math.clamp(ratio * 160, 6, 12)  
-                end  
+if root then
+local ratio = root.Size.Y / 350
+textLabel.TextSize = math.clamp(ratio * 160, 6, 12)
+end
 
-                local hp = math.floor(humanoid.Health)  
+local hp = math.floor(humanoid.Health)
 
-                textLabel.Text = "hp:"..formatHP(hp)  
+textLabel.Text = "hp:"..formatHP(hp)
 
-                if hp >= 65 then  
-                    textLabel.TextColor3 = Color3.fromRGB(0,255,0)  
-                elseif hp >= 40 then  
-                    textLabel.TextColor3 = Color3.fromRGB(255,255,0)  
-                elseif hp >= 25 then  
-                    textLabel.TextColor3 = Color3.fromRGB(255,165,0)  
-                else  
-                    textLabel.TextColor3 = Color3.fromRGB(255,0,0)  
-                end  
+if hp >= 65 then
+textLabel.TextColor3 = Color3.fromRGB(0,255,0)
+elseif hp >= 40 then
+textLabel.TextColor3 = Color3.fromRGB(255,255,0)
+elseif hp >= 25 then
+textLabel.TextColor3 = Color3.fromRGB(255,165,0)
+else
+textLabel.TextColor3 = Color3.fromRGB(255,0,0)
+end
 
-                bill.StudsOffset = Vector3.new(0, head.Size.Y * 3, 0)  
-            end)  
+bill.StudsOffset = Vector3.new(0, head.Size.Y * 3, 0)
+end)
 
-            espObjects[plr] = {  
-                highlight = highlight,  
-                billboard = bill,  
-                connection = conn  
-            }  
-        end  
-    end  
+espObjects[plr] = {
+highlight = highlight,
+billboard = bill,
+connection = conn
+}
+end
+end
 
-    if plr.Character then  
-        apply(plr.Character)  
-    end  
+if plr.Character then
+apply(plr.Character)
+end
 
-    plr.CharacterAdded:Connect(function(char)  
-        if selectedPlayersESP[plr] then  
-            task.wait(0.5)  
-            apply(char)  
-        end  
-    end)
+plr.CharacterAdded:Connect(function(char)
+if selectedPlayersESP[plr] then
+task.wait(0.5)
+apply(char)
+end
+end)
 end
 
 local allPlayerBtn = Instance.new("TextButton")
@@ -340,248 +697,366 @@ allPlayerBtn.TextSize = 9
 applyButtonStyle(allPlayerBtn)
 
 allPlayerBtn.MouseButton1Click:Connect(function()
-    allPlayerOn = not allPlayerOn
+allPlayerOn = not allPlayerOn
 
-    allPlayerBtn.Text = allPlayerOn and "All Player : ON" or "All Player : OFF"  
-    allPlayerBtn.BackgroundColor3 = allPlayerOn and Color3.fromRGB(38,55,38) or Color3.fromRGB(40,40,40)  
+allPlayerBtn.Text = allPlayerOn and "All Player : ON" or "All Player : OFF"
+allPlayerBtn.BackgroundColor3 = allPlayerOn and Color3.fromRGB(38,55,38) or Color3.fromRGB(40,40,40)
 
-    for _, plr in pairs(Players:GetPlayers()) do  
-        if plr ~= player then  
-            if allPlayerOn then  
-                selectedPlayersESP[plr] = true  
-                createESP(plr)  
-            else  
-                selectedPlayersESP[plr] = nil  
-                removeESP(plr)  
-            end  
-        end  
-    end  
+for _, plr in pairs(Players:GetPlayers()) do
+if plr ~= player then
+if allPlayerOn then
+selectedPlayersESP[plr] = true
+createESP(plr)
+else
+selectedPlayersESP[plr] = nil
+removeESP(plr)
+end
+end
+end
 
-    for _, v in pairs(espListFrame:GetChildren()) do  
-        if v:IsA("TextButton") and v ~= allPlayerBtn then  
-            v.BackgroundColor3 = allPlayerOn and Color3.fromRGB(38,55,38) or Color3.fromRGB(46,46,46)  
-        end  
-    end
+for _, v in pairs(espListFrame:GetChildren()) do
+if v:IsA("TextButton") and v ~= allPlayerBtn then
+v.BackgroundColor3 = allPlayerOn and Color3.fromRGB(38,55,38) or Color3.fromRGB(46,46,46)
+end
+end
 end)
 
 local function createESPPlayerButton(plr)
-    if plr == player then return end
+if plr == player then return end
 
-    local btn = Instance.new("TextButton")  
-    btn.Parent = espListFrame  
-    btn.Size = UDim2.new(1,0,0,16)  
-    btn.Text = plr.DisplayName  
-    btn.BackgroundColor3 = allPlayerOn and Color3.fromRGB(38,55,38) or Color3.fromRGB(46,46,46) 
-    btn.TextColor3 = Color3.fromRGB(255,255,255)  
-    btn.ZIndex = 52  
-    btn.LayoutOrder = 1  
-    btn.TextSize = 8  
+local btn = Instance.new("TextButton")
+btn.Parent = espListFrame
+btn.Size = UDim2.new(1,0,0,16)
+btn.Text = plr.DisplayName
+btn.BackgroundColor3 = allPlayerOn and Color3.fromRGB(38,55,38) or Color3.fromRGB(46,46,46)
+btn.TextColor3 = Color3.fromRGB(255,255,255)
+btn.ZIndex = 52
+btn.LayoutOrder = 1
+btn.TextSize = 8
 
-    applyButtonStyle(btn)  
+applyButtonStyle(btn)
 
-    btn.MouseButton1Click:Connect(function()  
-        if selectedPlayersESP[plr] then  
-            selectedPlayersESP[plr] = nil  
-            btn.BackgroundColor3 = Color3.fromRGB(46,46,46)  
-            removeESP(plr)  
-        else  
-            selectedPlayersESP[plr] = true  
-            btn.BackgroundColor3 = Color3.fromRGB(38,55,38)  
-            createESP(plr)  
-        end  
-    end)
+btn.MouseButton1Click:Connect(function()
+if selectedPlayersESP[plr] then
+selectedPlayersESP[plr] = nil
+btn.BackgroundColor3 = Color3.fromRGB(46,46,46)
+removeESP(plr)
+else
+selectedPlayersESP[plr] = true
+btn.BackgroundColor3 = Color3.fromRGB(38,55,38)
+createESP(plr)
+end
+end)
 end
 
 local function RefreshEvent()
-    Event = nil
+Event = nil
 
-    local Runtime = ReplicatedStorage:FindFirstChild("Runtime")
-    local Actors = Runtime and Runtime:FindFirstChild("Actors")
+local Runtime = ReplicatedStorage:FindFirstChild("Runtime")
+local Actors = Runtime and Runtime:FindFirstChild("Actors")
 
-    if not Actors then
-        return
-    end
+if not Actors then
+return
+end
 
-    if WatchedActors ~= Actors then
-        WatchedActors = Actors
+if WatchedActors ~= Actors then
+WatchedActors = Actors
 
-        Actors.ChildAdded:Connect(function()
-            if killAuraActive then
-                RestartAttackLoop()
-            end
-        end)
+Actors.ChildAdded:Connect(function()
+if killAuraActive then
+RestartAttackLoop()
+end
+end)
 
-        Actors.ChildRemoved:Connect(function()
-            if killAuraActive then
-                RestartAttackLoop()
-            end
-        end)
-    end
+Actors.ChildRemoved:Connect(function()
+if killAuraActive then
+RestartAttackLoop()
+end
+end)
+end
 
-    local Prefix = "Tool_Character_" .. player.UserId .. "_"
+local Prefix = "Tool_Character_" .. player.UserId .. "_"
 
-    for _, Character in ipairs(Actors:GetChildren()) do
-        if string.sub(Character.Name, 1, #Prefix) == Prefix then
-            local Functions = Character:FindFirstChild("Functions")
-            local Attack = Functions and Functions:FindFirstChild("Attack")
+for _, Character in ipairs(Actors:GetChildren()) do
+if string.sub(Character.Name, 1, #Prefix) == Prefix then
+local Functions = Character:FindFirstChild("Functions")
+local Attack = Functions and Functions:FindFirstChild("Attack")
 
-            if Attack and Attack.Parent then
-                Event = Attack
-                return
-            end
-        end
-    end
+if Attack and Attack.Parent then
+Event = Attack
+return
+end
+end
+end
 end
 
 RestartAttackLoop = function()
-    LoopVersion = LoopVersion + 1
+LoopVersion = LoopVersion + 1
 
-    if not killAuraActive then
-        return
-    end
+if not killAuraActive then
+return
+end
 
-    local CurrentVersion = LoopVersion
+local CurrentVersion = LoopVersion
 
-    task.spawn(function()
-        local InFlight = false
+task.spawn(function()
+local InFlight = false
 
-        while killAuraActive and LoopVersion == CurrentVersion do
-            RefreshEvent()
+while killAuraActive and LoopVersion == CurrentVersion do
+RefreshEvent()
 
-            if Event and not InFlight then
-                local CurrentEvent = Event
-                InFlight = true
+if Event and not InFlight then
+local CurrentEvent = Event
+InFlight = true
 
-                task.spawn(function()
-                    pcall(function()
-                        CurrentEvent:InvokeServer()
-                    end)
+task.spawn(function()
+pcall(function()
+CurrentEvent:InvokeServer()
+end)
 
-                    if LoopVersion == CurrentVersion then
-                        InFlight = false
-                    end
-                end)
-            end
+if LoopVersion == CurrentVersion then
+InFlight = false
+end
+end)
+end
 
-            task.wait(0.05)
-        end
-    end)
+task.wait(0.05)
+end
+end)
 end
 
 respawnBtn.MouseButton1Click:Connect(function()
-    local char = player.Character
-    if not char then return end
-    local root = char:FindFirstChild("HumanoidRootPart")
-    if not root then return end
-    savedPosition = root.Position
-    mainText.Text = "Position Saved"
-    subTextLeft.Text = string.format("X:%d Y:%d Z:%d", math.floor(savedPosition.X), math.floor(savedPosition.Y), math.floor(savedPosition.Z))
-    TweenService:Create(systemMessage, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2.new(1, -20, 1, -20)}):Play()
-    task.delay(3, function() TweenService:Create(systemMessage, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.In), {Position = UDim2.new(1, 400, 1, -20)}):Play() end)
+local char = player.Character
+if not char then return end
+local root = char:FindFirstChild("HumanoidRootPart")
+if not root then return end
+savedPosition = root.Position
+mainText.Text = "Position Saved"
+subTextLeft.Text = string.format("X:%d Y:%d Z:%d", math.floor(savedPosition.X), math.floor(savedPosition.Y), math.floor(savedPosition.Z))
+TweenService:Create(systemMessage, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2.new(1, -20, 1, -20)}):Play()
+task.delay(3, function() TweenService:Create(systemMessage, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.In), {Position = UDim2.new(1, 400, 1, -20)}):Play() end)
 end)
 
 antiVoidBtn.MouseButton1Click:Connect(function()
-    antiVoid = not antiVoid
-    antiVoidBtn.Text = antiVoid and "Anti Void : ON" or "Anti Void : OFF"
-    antiVoidBtn.BackgroundColor3 = antiVoid and Color3.fromRGB(38,55,38) or Color3.fromRGB(46,46,46)
+antiVoid = not antiVoid
+antiVoidBtn.Text = antiVoid and "Anti Void : ON" or "Anti Void : OFF"
+antiVoidBtn.BackgroundColor3 = antiVoid and Color3.fromRGB(38,55,38) or Color3.fromRGB(46,46,46)
 end)
 
 espToggleBtn.MouseButton1Click:Connect(function()
-    espActive = not espActive
-    espToggleBtn.Text = espActive and "ESP : ON" or "ESP : OFF"
-    espToggleBtn.BackgroundColor3 = espActive and Color3.fromRGB(38,55,38) or Color3.fromRGB(46,46,46)
-    espListGui.Visible = espActive
+espActive = not espActive
+espToggleBtn.Text = espActive and "ESP : ON" or "ESP : OFF"
+espToggleBtn.BackgroundColor3 = espActive and Color3.fromRGB(38,55,38) or Color3.fromRGB(46,46,46)
+espListGui.Visible = espActive
 end)
 
 autoSwingBtn.MouseButton1Click:Connect(function()
-    autoSwingActive = not autoSwingActive
-    autoSwingBtn.Text = autoSwingActive and "Auto Swing : ON" or "Auto Swing : OFF"
-    autoSwingBtn.BackgroundColor3 = autoSwingActive and Color3.fromRGB(38,55,38) or Color3.fromRGB(46,46,46)
+autoSwingActive = not autoSwingActive
+autoSwingBtn.Text = autoSwingActive and "Auto Swing : ON" or "Auto Swing : OFF"
+autoSwingBtn.BackgroundColor3 = autoSwingActive and Color3.fromRGB(38,55,38) or Color3.fromRGB(46,46,46)
 end)
 
 speed40Btn.MouseButton1Click:Connect(function()
-    speed40Active = not speed40Active
-    speed40ActiveBtn.Text = speed40Active and "Speed 40 : ON" or "Speed 40 : OFF"
-    speed40Btn.BackgroundColor3 = speed40Active and Color3.fromRGB(38,55,38) or Color3.fromRGB(46,46,46)
+speed40Active = not speed40Active
+speed40Btn.Text = speed40Active and "Speed 40 : ON" or "Speed 40 : OFF"
+speed40Btn.BackgroundColor3 = speed40Active and Color3.fromRGB(38,55,38) or Color3.fromRGB(46,46,46)
 end)
 
 killAuraBtn.MouseButton1Click:Connect(function()
-    killAuraActive = not killAuraActive
-    killAuraBtn.Text = killAuraActive and "Kill Aura : ON" or "Kill Aura : OFF"
-    killAuraBtn.BackgroundColor3 = killAuraActive and Color3.fromRGB(38,55,38) or Color3.fromRGB(46,46,46)
+killAuraActive = not killAuraActive
+killAuraBtn.Text = killAuraActive and "Kill Aura : ON" or "Kill Aura : OFF"
+killAuraBtn.BackgroundColor3 = killAuraActive and Color3.fromRGB(38,55,38) or Color3.fromRGB(46,46,46)
 
-    if killAuraActive then
-        RestartAttackLoop()
-    else
-        LoopVersion = LoopVersion + 1
-        Event = nil
-    end
+if killAuraActive then
+RestartAttackLoop()
+else
+LoopVersion = LoopVersion + 1
+Event = nil
+end
 end)
 
 tpHomeBtn.MouseButton1Click:Connect(function()
-    local char = player.Character
-    if char then
-        local root = char:FindFirstChild("HumanoidRootPart")
-        if root then
-            root.CFrame = CFrame.new(-27, 102, 347)
-        end
-    end
+local char = player.Character
+if char then
+local root = char:FindFirstChild("HumanoidRootPart")
+if root then
+root.CFrame = CFrame.new(-27, 102, 347)
+end
+end
+end)
+
+autoFarmBtn.MouseButton1Click:Connect(function()
+SetAutoFarmEnabled(not autoFarmActive)
 end)
 
 openBtn.MouseButton1Click:Connect(function() frame.Visible = not frame.Visible end)
 
-RunService.Heartbeat:Connect(function()
-    if antiVoid then
-        local char = player.Character
-        if char then
-            local root = char:FindFirstChild("HumanoidRootPart")
-            if root and root.Position.Y <= -400 then 
-                root.CFrame = CFrame.new(0,100,0) 
-            end
-        end
-    end
+local CurrentTarget = nil
+local IsItemTarget = false
+local RefreshTimer = 0
+local KeyPressTimer = 0
+local MAX_SPEED = 40
 
-    local char = player.Character
-    if char then
-        local humanoid = char:FindFirstChildOfClass("Humanoid")
-        if humanoid and speed40Active then
-            humanoid.WalkSpeed = 40
-        end
+RunService.Heartbeat:Connect(function(DeltaTime)
+if antiVoid then
+local char = player.Character
+if char then
+local root = char:FindFirstChild("HumanoidRootPart")
+if root and root.Position.Y <= -400 then
+root.CFrame = CFrame.new(0,100,0)
+end
+end
+end
 
-        if autoSwingActive then
-            local tool = char:FindFirstChildOfClass("Tool")
-            if tool then
-                pcall(function() tool:Activate() end)
-            end
-        end
-    end
+local char = player.Character
+if char then
+local humanoid = char:FindFirstChildOfClass("Humanoid")
+if humanoid and speed40Active then
+humanoid.WalkSpeed = 40
+end
+
+if autoSwingActive then
+local tool = char:FindFirstChildOfClass("Tool")
+if tool then
+pcall(function() tool:Activate() end)
+end
+end
+end
+
+if not autoFarmActive then
+CurrentTarget = nil
+IsItemTarget = false
+RefreshTimer = 0
+KeyPressTimer = 0
+return
+end
+
+EnableNoclip()
+
+RefreshTimer = RefreshTimer + DeltaTime
+
+if RefreshTimer >= 0.5 then
+CurrentTarget, IsItemTarget = FindPriorityTarget()
+RefreshTimer = 0
+end
+
+local Character = player.Character
+local Root = Character and Character:FindFirstChild("HumanoidRootPart")
+
+if not Root then
+KeyPressTimer = 0
+StopFollowing()
+return
+end
+
+if not CurrentTarget or not CurrentTarget.Parent then
+CurrentTarget = nil
+IsItemTarget = false
+KeyPressTimer = 0
+StopFollowing()
+return
+end
+
+if not IsItemTarget then
+KeyPressTimer = 0
+local TargetModel = CurrentTarget:FindFirstAncestorOfClass("Model")
+local TargetHumanoid = TargetModel and TargetModel:FindFirstChildOfClass("Humanoid")
+
+if not IsAttackableMonster(TargetModel, TargetHumanoid) or not IsWithinAnchorRadius(CurrentTarget.Position) then
+CurrentTarget = nil
+StopFollowing()
+return
+end
+else
+if not IsWithinAnchorRadius(CurrentTarget.Position) then
+CurrentTarget = nil
+IsItemTarget = false
+KeyPressTimer = 0
+StopFollowing()
+return
+end
+end
+
+if not CurrentMover or CurrentMover.Parent ~= Root then
+if CurrentMover then
+CurrentMover:Destroy()
+end
+
+CurrentMover = Instance.new("BodyVelocity")
+CurrentMover.Name = "ChickenFollowVelocity"
+CurrentMover.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+CurrentMover.P = 12500
+CurrentMover.Velocity = Vector3.zero
+CurrentMover.Parent = Root
+end
+
+local TargetPosition = CurrentTarget.Position
+
+if IsItemTarget then
+local XZDistance = Vector2.new(TargetPosition.X - Root.Position.X, TargetPosition.Z - Root.Position.Z).Magnitude
+if XZDistance <= 2 then
+KeyPressTimer = KeyPressTimer + DeltaTime
+if KeyPressTimer >= 0.1 then
+PressKeyE()
+KeyPressTimer = 0
+end
+else
+KeyPressTimer = 0
+end
+else
+KeyPressTimer = 0
+end
+
+local FlyPosition = IsItemTarget and TargetPosition or (TargetPosition + Vector3.new(0, -2, 0))
+
+local Direction = FlyPosition - Root.Position
+local Distance = Direction.Magnitude
+
+if Distance > 1 then
+CurrentMover.Velocity = Direction.Unit * MAX_SPEED
+
+local LookDirection = Vector3.new(
+TargetPosition.X - Root.Position.X,
+0,
+TargetPosition.Z - Root.Position.Z
+)
+
+if LookDirection.Magnitude > 0.001 then
+Root.CFrame = CFrame.lookAt(
+Root.Position,
+Root.Position + LookDirection
+)
+end
+else
+CurrentMover.Velocity = Vector3.zero
+end
 end)
 
 player.CharacterAdded:Connect(function(char)
-    local root = char:WaitForChild("HumanoidRootPart")
-    if savedPosition then
-        for i = 1, 5 do
-            root.CFrame = CFrame.new(savedPosition)
-            task.wait()
-        end
-    end
+local root = char:WaitForChild("HumanoidRootPart")
+if savedPosition then
+for i = 1, 5 do
+root.CFrame = CFrame.new(savedPosition)
+task.wait()
+end
+end
 
-    if killAuraActive then
-        RestartAttackLoop()
-    end
+if killAuraActive then
+RestartAttackLoop()
+end
 end)
 
 for _, plr in pairs(Players:GetPlayers()) do
-    createESPPlayerButton(plr)
+createESPPlayerButton(plr)
 end
 
 Players.PlayerAdded:Connect(createESPPlayerButton)
 
 Players.PlayerRemoving:Connect(function(plr)
-    for _, v in pairs(espListFrame:GetChildren()) do
-        if v:IsA("TextButton") and v.Text == plr.DisplayName then
-            v:Destroy()
-        end
-    end
-    removeESP(plr)
+for _, v in pairs(espListFrame:GetChildren()) do
+if v:IsA("TextButton") and v.Text == plr.DisplayName then
+v:Destroy()
+end
+end
+removeESP(plr)
 end)
