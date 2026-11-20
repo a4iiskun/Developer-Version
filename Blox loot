@@ -5,6 +5,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 local CollectionService = game:GetService("CollectionService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
+local VirtualUser = game:GetService("VirtualUser")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -38,6 +39,7 @@ local MAX_ENEMY_RADIUS = 100
 local AirborneTimer = 0
 local AirbornePaused = false
 local AIRBORNE_PAUSE_THRESHOLD = 3
+local AntiAfkConnection = nil
 
 local BLOCKED_TAGS = {
 NPC = true,
@@ -610,7 +612,17 @@ autoFarmBtn.BackgroundColor3 = autoFarmActive and Color3.fromRGB(38,55,38) or Co
 AirborneTimer = 0
 AirbornePaused = false
 
+if AntiAfkConnection then
+AntiAfkConnection:Disconnect()
+AntiAfkConnection = nil
+end
+
 if autoFarmActive then
+AntiAfkConnection = player.Idled:Connect(function()
+VirtualUser:CaptureController()
+VirtualUser:ClickButton2(Vector2.zero)
+end)
+
 local Character = player.Character
 local Root = Character and Character:FindFirstChild("HumanoidRootPart")
 AnchorPosition = Root and Root.Position or nil
