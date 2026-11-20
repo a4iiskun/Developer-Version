@@ -32,6 +32,7 @@ local RestartAttackLoop
 local OriginalCanCollide = {}
 local CurrentMover = nil
 local AnchorPosition = nil
+local LastFarmPosition = nil
 local RangeVisualModel = nil
 local MAX_ENEMY_RADIUS = 100
 
@@ -571,6 +572,32 @@ Humanoid:MoveTo(Root.Position)
 end
 end
 
+local function HoldAtLastPosition(Root)
+if not CurrentMover or CurrentMover.Parent ~= Root then
+if CurrentMover then
+CurrentMover:Destroy()
+end
+
+CurrentMover = Instance.new("BodyVelocity")
+CurrentMover.Name = "ChickenFollowVelocity"
+CurrentMover.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+CurrentMover.P = 12500
+CurrentMover.Velocity = Vector3.zero
+CurrentMover.Parent = Root
+end
+
+if LastFarmPosition then
+local Offset = LastFarmPosition - Root.Position
+if Offset.Magnitude > 0.2 then
+CurrentMover.Velocity = Offset.Unit * math.min(Offset.Magnitude * 10, 30)
+else
+CurrentMover.Velocity = Vector3.zero
+end
+else
+CurrentMover.Velocity = Vector3.zero
+end
+end
+
 local function SetAutoFarmEnabled(Value)
 autoFarmActive = Value
 
@@ -581,10 +608,12 @@ if autoFarmActive then
 local Character = player.Character
 local Root = Character and Character:FindFirstChild("HumanoidRootPart")
 AnchorPosition = Root and Root.Position or nil
+LastFarmPosition = Root and Root.Position or nil
 ShowRangeVisual(AnchorPosition)
 EnableNoclip()
 else
 AnchorPosition = nil
+LastFarmPosition = nil
 ClearRangeVisual()
 DisableNoclip()
 StopFollowing()
@@ -895,7 +924,7 @@ local CurrentTarget = nil
 local IsItemTarget = false
 local RefreshTimer = 0
 local KeyPressTimer = 0
-local MAX_SPEED = 35
+local MAX_SPEED = 30
 
 RunService.Heartbeat:Connect(function(DeltaTime)
 if antiVoid then
@@ -945,7 +974,6 @@ local Root = Character and Character:FindFirstChild("HumanoidRootPart")
 
 if not Root then
 KeyPressTimer = 0
-StopFollowing()
 return
 end
 
@@ -953,7 +981,7 @@ if not CurrentTarget or not CurrentTarget.Parent then
 CurrentTarget = nil
 IsItemTarget = false
 KeyPressTimer = 0
-StopFollowing()
+HoldAtLastPosition(Root)
 return
 end
 
@@ -964,7 +992,7 @@ local TargetHumanoid = TargetModel and TargetModel:FindFirstChildOfClass("Humano
 
 if not IsAttackableMonster(TargetModel, TargetHumanoid) or not IsWithinAnchorRadius(CurrentTarget.Position) then
 CurrentTarget = nil
-StopFollowing()
+HoldAtLastPosition(Root)
 return
 end
 else
@@ -972,7 +1000,7 @@ if not IsWithinAnchorRadius(CurrentTarget.Position) then
 CurrentTarget = nil
 IsItemTarget = false
 KeyPressTimer = 0
-StopFollowing()
+HoldAtLastPosition(Root)
 return
 end
 end
@@ -1014,6 +1042,7 @@ local Distance = Direction.Magnitude
 
 if Distance > 1 then
 CurrentMover.Velocity = Direction.Unit * MAX_SPEED
+LastFarmPosition = Root.Position
 
 local LookDirection = Vector3.new(
 TargetPosition.X - Root.Position.X,
@@ -1029,6 +1058,7 @@ Root.Position + LookDirection
 end
 else
 CurrentMover.Velocity = Vector3.zero
+LastFarmPosition = Root.Position
 end
 end)
 
