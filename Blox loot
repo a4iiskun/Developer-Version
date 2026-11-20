@@ -938,7 +938,7 @@ local char = player.Character
 if char then
 local root = char:FindFirstChild("HumanoidRootPart")
 if root and root.Position.Y <= -400 then
-root.CFrame = CFrame.new(0,100,0)
+root.CFrame = CFrame.new(root.Position.X, 100, root.Position.Z)
 end
 end
 end
