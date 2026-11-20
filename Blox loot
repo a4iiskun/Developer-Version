@@ -895,7 +895,7 @@ local CurrentTarget = nil
 local IsItemTarget = false
 local RefreshTimer = 0
 local KeyPressTimer = 0
-local MAX_SPEED = 40
+local MAX_SPEED = 35
 
 RunService.Heartbeat:Connect(function(DeltaTime)
 if antiVoid then
