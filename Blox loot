@@ -35,6 +35,9 @@ local AnchorPosition = nil
 local LastFarmPosition = nil
 local RangeVisualModel = nil
 local MAX_ENEMY_RADIUS = 100
+local AirborneTimer = 0
+local AirbornePaused = false
+local AIRBORNE_PAUSE_THRESHOLD = 3
 
 local BLOCKED_TAGS = {
 NPC = true,
@@ -604,6 +607,9 @@ autoFarmActive = Value
 autoFarmBtn.Text = autoFarmActive and "Auto Farm : ON" or "Auto Farm : OFF"
 autoFarmBtn.BackgroundColor3 = autoFarmActive and Color3.fromRGB(38,55,38) or Color3.fromRGB(46,46,46)
 
+AirborneTimer = 0
+AirbornePaused = false
+
 if autoFarmActive then
 local Character = player.Character
 local Root = Character and Character:FindFirstChild("HumanoidRootPart")
@@ -957,24 +963,49 @@ CurrentTarget = nil
 IsItemTarget = false
 RefreshTimer = 0
 KeyPressTimer = 0
+AirborneTimer = 0
+AirbornePaused = false
 return
 end
 
 EnableNoclip()
+
+local Character = player.Character
+local Root = Character and Character:FindFirstChild("HumanoidRootPart")
+local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
+
+if not Root or not Humanoid then
+KeyPressTimer = 0
+AirborneTimer = 0
+AirbornePaused = false
+return
+end
+
+local IsGrounded = Humanoid.FloorMaterial ~= Enum.Material.Air and Humanoid:GetState() ~= Enum.HumanoidStateType.Freefall
+
+if IsGrounded then
+AirborneTimer = 0
+if AirbornePaused then
+AirbornePaused = false
+end
+else
+AirborneTimer = AirborneTimer + DeltaTime
+if AirborneTimer >= AIRBORNE_PAUSE_THRESHOLD then
+AirbornePaused = true
+end
+end
+
+if AirbornePaused then
+KeyPressTimer = 0
+StopFollowing()
+return
+end
 
 RefreshTimer = RefreshTimer + DeltaTime
 
 if RefreshTimer >= 0.5 then
 CurrentTarget, IsItemTarget = FindPriorityTarget()
 RefreshTimer = 0
-end
-
-local Character = player.Character
-local Root = Character and Character:FindFirstChild("HumanoidRootPart")
-
-if not Root then
-KeyPressTimer = 0
-return
 end
 
 if not CurrentTarget or not CurrentTarget.Parent then
