@@ -41,6 +41,12 @@ local AirbornePaused = false
 local AIRBORNE_PAUSE_THRESHOLD = 3
 local AntiAfkConnection = nil
 
+local AUTO_FARM_CYCLE_INTERVAL = 180
+local AUTO_FARM_REST_DURATION = 5
+local AutoFarmCycleTimer = 0
+local AutoFarmRestTimer = 0
+local AutoFarmResting = false
+
 local BLOCKED_TAGS = {
 NPC = true,
 Shop = true,
@@ -673,6 +679,9 @@ autoFarmBtn.BackgroundColor3 = autoFarmActive and Color3.fromRGB(38,55,38) or Co
 
 AirborneTimer = 0
 AirbornePaused = false
+AutoFarmCycleTimer = 0
+AutoFarmRestTimer = 0
+AutoFarmResting = false
 
 if AntiAfkConnection then
 AntiAfkConnection:Disconnect()
@@ -1041,7 +1050,38 @@ RefreshTimer = 0
 KeyPressTimer = 0
 AirborneTimer = 0
 AirbornePaused = false
+AutoFarmCycleTimer = 0
+AutoFarmRestTimer = 0
+AutoFarmResting = false
 return
+end
+
+if AutoFarmResting then
+AutoFarmRestTimer = AutoFarmRestTimer + DeltaTime
+if AutoFarmRestTimer >= AUTO_FARM_REST_DURATION then
+AutoFarmResting = false
+AutoFarmRestTimer = 0
+AutoFarmCycleTimer = 0
+EnableNoclip()
+else
+return
+end
+else
+AutoFarmCycleTimer = AutoFarmCycleTimer + DeltaTime
+if AutoFarmCycleTimer >= AUTO_FARM_CYCLE_INTERVAL then
+AutoFarmResting = true
+AutoFarmRestTimer = 0
+AutoFarmCycleTimer = 0
+CurrentTarget = nil
+IsItemTarget = false
+RefreshTimer = 0
+KeyPressTimer = 0
+AirborneTimer = 0
+AirbornePaused = false
+DisableNoclip()
+StopFollowing()
+return
+end
 end
 
 EnableNoclip()
