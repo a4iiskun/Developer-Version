@@ -36,17 +36,10 @@ local AnchorPosition = nil
 local LastFarmPosition = nil
 local RangeVisualModel = nil
 local MAX_ENEMY_RADIUS = 100
-local WALL_PASSAGE_RADIUS = 10
 local AirborneTimer = 0
 local AirbornePaused = false
 local AIRBORNE_PAUSE_THRESHOLD = 3
 local AntiAfkConnection = nil
-
-local AUTO_FARM_CYCLE_INTERVAL = 180
-local AUTO_FARM_REST_DURATION = 5
-local AutoFarmCycleTimer = 0
-local AutoFarmRestTimer = 0
-local AutoFarmResting = false
 
 local BLOCKED_TAGS = {
 NPC = true,
@@ -132,78 +125,46 @@ end
 return false
 end
 
-local function IsPathBlockedByWall(Character, Origin, TargetVec)
-if not Character or not Origin or not TargetVec or TargetVec.Magnitude <= 0.001 then
-return false
-end
-
-local rayParams = RaycastParams.new()
-rayParams.FilterType = Enum.RaycastFilterType.Exclude
-rayParams.FilterDescendantsInstances = { Character }
-
-local checkDist = math.min(TargetVec.Magnitude, WALL_PASSAGE_RADIUS)
-local dirUnit = TargetVec.Unit
-
-local offsets = {
-Vector3.zero,
-Vector3.new(0, 2, 0),
-Vector3.new(0, -2, 0),
-}
-
-for _, offset in ipairs(offsets) do
-local result = workspace:Raycast(Origin + offset, dirUnit * checkDist, rayParams)
-if result and result.Instance and result.Instance:IsA("BasePart") and result.Instance.CanCollide then
-return true
-end
-end
-
-return false
-end
-
-local function FindPassageDirection(Character, Root, DesiredDirection)
-if not Character or not Root then
+local function FindNearestGroundY(Character, Root, Humanoid, SamplePosition)
+if not Root or not Humanoid then
 return nil
 end
 
 local rayParams = RaycastParams.new()
 rayParams.FilterType = Enum.RaycastFilterType.Exclude
+if Character then
 rayParams.FilterDescendantsInstances = { Character }
-
-local desiredFlat = Vector3.new(DesiredDirection.X, 0, DesiredDirection.Z)
-if desiredFlat.Magnitude > 0.001 then
-desiredFlat = desiredFlat.Unit
-else
-desiredFlat = Vector3.new(0, 0, -1)
 end
 
-local bestDir = nil
-local bestScore = -math.huge
+local origin = SamplePosition or Root.Position
+local result = workspace:Raycast(origin, Vector3.new(0, -500, 0), rayParams)
 
-local stepCount = 24
-for i = 0, stepCount - 1 do
-local angle = (i / stepCount) * math.pi * 2
-local candidate = Vector3.new(math.cos(angle), 0, math.sin(angle)).Unit
-
-local blocked = false
-local yOffsets = { 0, 2, -2 }
-for _, yOff in ipairs(yOffsets) do
-local hit = workspace:Raycast(Root.Position + Vector3.new(0, yOff, 0), candidate * WALL_PASSAGE_RADIUS, rayParams)
-if hit and hit.Instance and hit.Instance:IsA("BasePart") and hit.Instance.CanCollide then
-blocked = true
-break
-end
+if result and result.Instance and result.Instance:IsA("BasePart") and result.Instance.CanCollide then
+local hipHeight = Humanoid.HipHeight > 0 and Humanoid.HipHeight or (Root.Size.Y * 0.5 + 1.5)
+return result.Position.Y + hipHeight
 end
 
-if not blocked then
-local alignScore = candidate:Dot(desiredFlat)
-if alignScore > bestScore then
-bestScore = alignScore
-bestDir = candidate
-end
-end
+return nil
 end
 
-return bestDir
+local function IsCharacterInAir(Character, Root, Humanoid)
+if not Root or not Humanoid then
+return false
+end
+
+if Humanoid.FloorMaterial == Enum.Material.Air or Humanoid:GetState() == Enum.HumanoidStateType.Freefall then
+return true
+end
+
+local rayParams = RaycastParams.new()
+rayParams.FilterType = Enum.RaycastFilterType.Exclude
+if Character then
+rayParams.FilterDescendantsInstances = { Character }
+end
+
+local checkDistance = (Humanoid.HipHeight > 0 and Humanoid.HipHeight or 2.5) + 1.5
+local result = workspace:Raycast(Root.Position, Vector3.new(0, -checkDistance, 0), rayParams)
+return result == nil
 end
 
 local function applyButtonStyle(button)
@@ -754,9 +715,6 @@ autoFarmBtn.BackgroundColor3 = autoFarmActive and Color3.fromRGB(38,55,38) or Co
 
 AirborneTimer = 0
 AirbornePaused = false
-AutoFarmCycleTimer = 0
-AutoFarmRestTimer = 0
-AutoFarmResting = false
 
 if AntiAfkConnection then
 AntiAfkConnection:Disconnect()
@@ -1125,38 +1083,7 @@ RefreshTimer = 0
 KeyPressTimer = 0
 AirborneTimer = 0
 AirbornePaused = false
-AutoFarmCycleTimer = 0
-AutoFarmRestTimer = 0
-AutoFarmResting = false
 return
-end
-
-if AutoFarmResting then
-AutoFarmRestTimer = AutoFarmRestTimer + DeltaTime
-if AutoFarmRestTimer >= AUTO_FARM_REST_DURATION then
-AutoFarmResting = false
-AutoFarmRestTimer = 0
-AutoFarmCycleTimer = 0
-EnableNoclip()
-else
-return
-end
-else
-AutoFarmCycleTimer = AutoFarmCycleTimer + DeltaTime
-if AutoFarmCycleTimer >= AUTO_FARM_CYCLE_INTERVAL then
-AutoFarmResting = true
-AutoFarmRestTimer = 0
-AutoFarmCycleTimer = 0
-CurrentTarget = nil
-IsItemTarget = false
-RefreshTimer = 0
-KeyPressTimer = 0
-AirborneTimer = 0
-AirbornePaused = false
-DisableNoclip()
-StopFollowing()
-return
-end
 end
 
 EnableNoclip()
@@ -1260,21 +1187,18 @@ end
 
 local FlyPosition = IsItemTarget and TargetPosition or (TargetPosition + Vector3.new(0, -2, 0))
 
+if IsCharacterInAir(Character, Root, Humanoid) then
+local GroundY = FindNearestGroundY(Character, Root, Humanoid, Vector3.new(Root.Position.X, Root.Position.Y, Root.Position.Z))
+if GroundY then
+FlyPosition = Vector3.new(FlyPosition.X, GroundY, FlyPosition.Z)
+end
+end
+
 local Direction = FlyPosition - Root.Position
 local Distance = Direction.Magnitude
 
 if Distance > 1 then
-local MoveDir = Direction.Unit
-local WallDetected = IsTouchingWall or IsPathBlockedByWall(Character, Root.Position, Direction)
-
-if WallDetected then
-local PassageDir = FindPassageDirection(Character, Root, Direction)
-if PassageDir then
-MoveDir = Vector3.new(PassageDir.X, Direction.Unit.Y * 0.35, PassageDir.Z).Unit
-end
-end
-
-CurrentMover.Velocity = MoveDir * MAX_SPEED
+CurrentMover.Velocity = Direction.Unit * MAX_SPEED
 LastFarmPosition = Root.Position
 
 local LookDirection = Vector3.new(
