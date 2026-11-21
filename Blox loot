@@ -167,6 +167,69 @@ local result = workspace:Raycast(Root.Position, Vector3.new(0, -checkDistance, 0
 return result == nil
 end
 
+local function GetPlayerFootBottomOffset(Character, Root, Humanoid)
+if not Root then
+return 2.5
+end
+
+local minBottomY = Root.Position.Y - (Root.Size.Y * 0.5)
+
+if Character then
+local footPartNames = {
+"LeftFoot",
+"RightFoot",
+"LeftLowerLeg",
+"RightLowerLeg",
+"LeftLeg",
+"RightLeg",
+}
+
+for _, partName in ipairs(footPartNames) do
+local part = Character:FindFirstChild(partName)
+if part and part:IsA("BasePart") then
+local partBottomY = part.Position.Y - (part.Size.Y * 0.5)
+if partBottomY < minBottomY then
+minBottomY = partBottomY
+end
+end
+end
+end
+
+local offset = Root.Position.Y - minBottomY
+if offset <= 0.1 and Humanoid and Humanoid.HipHeight > 0 then
+offset = Humanoid.HipHeight + (Root.Size.Y * 0.5)
+end
+
+return math.max(offset, 0.5)
+end
+
+local function GetEnemyBottomY(TargetPart)
+if not TargetPart then
+return nil
+end
+
+local model = TargetPart:FindFirstAncestorOfClass("Model")
+if not model then
+return TargetPart.Position.Y - (TargetPart.Size.Y * 0.5)
+end
+
+local lowestY = math.huge
+for _, desc in ipairs(model:GetDescendants()) do
+if desc:IsA("BasePart") then
+local partBottomY = desc.Position.Y - (desc.Size.Y * 0.5)
+if partBottomY < lowestY then
+lowestY = partBottomY
+end
+end
+end
+
+if lowestY == math.huge then
+return TargetPart.Position.Y - (TargetPart.Size.Y * 0.5)
+end
+
+return lowestY
+end
+
 local function applyButtonStyle(button)
 button.BorderSizePixel = 0
 button.AutoButtonColor = false
@@ -1185,7 +1248,14 @@ else
 KeyPressTimer = 0
 end
 
-local FlyPosition = IsItemTarget and TargetPosition or (TargetPosition + Vector3.new(0, -2, 0))
+local FlyPosition = TargetPosition
+if not IsItemTarget then
+local enemyBottomY = GetEnemyBottomY(CurrentTarget)
+local footOffset = GetPlayerFootBottomOffset(Character, Root, Humanoid)
+if enemyBottomY then
+FlyPosition = Vector3.new(TargetPosition.X, enemyBottomY + footOffset, TargetPosition.Z)
+end
+end
 
 if IsCharacterInAir(Character, Root, Humanoid) then
 local GroundY = FindNearestGroundY(Character, Root, Humanoid, Vector3.new(Root.Position.X, Root.Position.Y, Root.Position.Z))
