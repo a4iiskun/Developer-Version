@@ -63,6 +63,68 @@ Quest = true,
 Quests = true,
 }
 
+local BODY_AND_LEG_PARTS = {
+HumanoidRootPart = true,
+UpperTorso = true,
+LowerTorso = true,
+Torso = true,
+LeftLeg = true,
+RightLeg = true,
+LeftUpperLeg = true,
+LeftLowerLeg = true,
+LeftFoot = true,
+RightUpperLeg = true,
+RightLowerLeg = true,
+RightFoot = true,
+}
+
+local function IsBodyOrLegsTouchingWall(Character, Root)
+if not Character then
+return false
+end
+
+local overlapParams = OverlapParams.new()
+overlapParams.FilterType = Enum.RaycastFilterType.Exclude
+overlapParams.FilterDescendantsInstances = { Character }
+
+for partName in pairs(BODY_AND_LEG_PARTS) do
+local part = Character:FindFirstChild(partName)
+if part and part:IsA("BasePart") then
+local partsInBox = workspace:GetPartBoundsInBox(part.CFrame, part.Size + Vector3.new(0.35, 0.25, 0.35), overlapParams)
+for _, hitPart in ipairs(partsInBox) do
+if hitPart:IsA("BasePart") and hitPart.CanCollide and not hitPart:IsDescendantOf(Character) then
+return true
+end
+end
+end
+end
+
+if Root then
+local rays = {
+Root.CFrame.LookVector * 1.4,
+-Root.CFrame.LookVector * 1.4,
+Root.CFrame.RightVector * 1.4,
+-Root.CFrame.RightVector * 1.4,
+(Root.CFrame.LookVector + Root.CFrame.RightVector).Unit * 1.4,
+(Root.CFrame.LookVector - Root.CFrame.RightVector).Unit * 1.4,
+(-Root.CFrame.LookVector + Root.CFrame.RightVector).Unit * 1.4,
+(-Root.CFrame.LookVector - Root.CFrame.RightVector).Unit * 1.4,
+}
+local rayParams = RaycastParams.new()
+rayParams.FilterType = Enum.RaycastFilterType.Exclude
+rayParams.FilterDescendantsInstances = { Character }
+
+for _, dir in ipairs(rays) do
+local result = workspace:Raycast(Root.Position, dir, rayParams)
+if result and result.Instance and result.Instance:IsA("BasePart") and result.Instance.CanCollide then
+return true
+end
+end
+end
+
+return false
+end
+
 local function applyButtonStyle(button)
 button.BorderSizePixel = 0
 button.AutoButtonColor = false
@@ -949,8 +1011,10 @@ if antiVoid then
 local char = player.Character
 if char then
 local root = char:FindFirstChild("HumanoidRootPart")
-if root and root.Position.Y <= -400 then
-root.CFrame = CFrame.new(root.Position.X, 100, root.Position.Z)
+if root and root.Position.Y <= 0 then
+root.CFrame = CFrame.new(root.Position.X, 50, root.Position.Z)
+root.AssemblyLinearVelocity = Vector3.zero
+root.AssemblyAngularVelocity = Vector3.zero
 end
 end
 end
@@ -994,8 +1058,9 @@ return
 end
 
 local IsGrounded = Humanoid.FloorMaterial ~= Enum.Material.Air and Humanoid:GetState() ~= Enum.HumanoidStateType.Freefall
+local IsTouchingWall = IsBodyOrLegsTouchingWall(Character, Root)
 
-if IsGrounded then
+if IsGrounded or IsTouchingWall then
 AirborneTimer = 0
 if AirbornePaused then
 AirbornePaused = false
