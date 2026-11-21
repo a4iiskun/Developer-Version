@@ -39,6 +39,9 @@ local MAX_ENEMY_RADIUS = 100
 local AirborneTimer = 0
 local AirbornePaused = false
 local AIRBORNE_PAUSE_THRESHOLD = 3
+local StuckTimer = 0
+local STUCK_ESCAPE_THRESHOLD = 3
+local EscapeTargetPosition = nil
 local AntiAfkConnection = nil
 
 local BLOCKED_TAGS = {
@@ -125,6 +128,71 @@ end
 return false
 end
 
+local function IsPositionClear(Character, Root, CandidatePos)
+if not Root or not CandidatePos then
+return false
+end
+
+local overlapParams = OverlapParams.new()
+overlapParams.FilterType = Enum.RaycastFilterType.Exclude
+if Character then
+overlapParams.FilterDescendantsInstances = { Character }
+end
+
+local testSize = Root.Size + Vector3.new(2.2, 3.2, 2.2)
+local partsInBox = workspace:GetPartBoundsInBox(CFrame.new(CandidatePos), testSize, overlapParams)
+for _, hitPart in ipairs(partsInBox) do
+if hitPart:IsA("BasePart") and hitPart.CanCollide and (not Character or not hitPart:IsDescendantOf(Character)) then
+return false
+end
+end
+
+return true
+end
+
+local function FindNearestClearOutsidePosition(Character, Root)
+if not Root then
+return nil
+end
+
+local origin = Root.Position
+local bestPos = nil
+local bestDist = math.huge
+
+local directions = {
+Vector3.new(1, 0, 0),
+Vector3.new(-1, 0, 0),
+Vector3.new(0, 0, 1),
+Vector3.new(0, 0, -1),
+Vector3.new(1, 0, 1).Unit,
+Vector3.new(1, 0, -1).Unit,
+Vector3.new(-1, 0, 1).Unit,
+Vector3.new(-1, 0, -1).Unit,
+Vector3.new(0, 1, 0),
+Vector3.new(0, -1, 0),
+}
+
+local distances = { 3, 5, 8, 12, 16 }
+
+for _, dist in ipairs(distances) do
+for _, dir in ipairs(directions) do
+local candidate = origin + (dir * dist)
+if IsPositionClear(Character, Root, candidate) then
+local d = (candidate - origin).Magnitude
+if d < bestDist then
+bestDist = d
+bestPos = candidate
+end
+end
+end
+if bestPos then
+break
+end
+end
+
+return bestPos
+end
+
 local function FindNearestGroundY(Character, Root, Humanoid, SamplePosition)
 if not Root or not Humanoid then
 return nil
@@ -165,69 +233,6 @@ end
 local checkDistance = (Humanoid.HipHeight > 0 and Humanoid.HipHeight or 2.5) + 1.5
 local result = workspace:Raycast(Root.Position, Vector3.new(0, -checkDistance, 0), rayParams)
 return result == nil
-end
-
-local function GetPlayerFootBottomOffset(Character, Root, Humanoid)
-if not Root then
-return 2.5
-end
-
-local minBottomY = Root.Position.Y - (Root.Size.Y * 0.5)
-
-if Character then
-local footPartNames = {
-"LeftFoot",
-"RightFoot",
-"LeftLowerLeg",
-"RightLowerLeg",
-"LeftLeg",
-"RightLeg",
-}
-
-for _, partName in ipairs(footPartNames) do
-local part = Character:FindFirstChild(partName)
-if part and part:IsA("BasePart") then
-local partBottomY = part.Position.Y - (part.Size.Y * 0.5)
-if partBottomY < minBottomY then
-minBottomY = partBottomY
-end
-end
-end
-end
-
-local offset = Root.Position.Y - minBottomY
-if offset <= 0.1 and Humanoid and Humanoid.HipHeight > 0 then
-offset = Humanoid.HipHeight + (Root.Size.Y * 0.5)
-end
-
-return math.max(offset, 0.5)
-end
-
-local function GetEnemyBottomY(TargetPart)
-if not TargetPart then
-return nil
-end
-
-local model = TargetPart:FindFirstAncestorOfClass("Model")
-if not model then
-return TargetPart.Position.Y - (TargetPart.Size.Y * 0.5)
-end
-
-local lowestY = math.huge
-for _, desc in ipairs(model:GetDescendants()) do
-if desc:IsA("BasePart") then
-local partBottomY = desc.Position.Y - (desc.Size.Y * 0.5)
-if partBottomY < lowestY then
-lowestY = partBottomY
-end
-end
-end
-
-if lowestY == math.huge then
-return TargetPart.Position.Y - (TargetPart.Size.Y * 0.5)
-end
-
-return lowestY
 end
 
 local function applyButtonStyle(button)
@@ -778,6 +783,8 @@ autoFarmBtn.BackgroundColor3 = autoFarmActive and Color3.fromRGB(38,55,38) or Co
 
 AirborneTimer = 0
 AirbornePaused = false
+StuckTimer = 0
+EscapeTargetPosition = nil
 
 if AntiAfkConnection then
 AntiAfkConnection:Disconnect()
@@ -1146,6 +1153,8 @@ RefreshTimer = 0
 KeyPressTimer = 0
 AirborneTimer = 0
 AirbornePaused = false
+StuckTimer = 0
+EscapeTargetPosition = nil
 return
 end
 
@@ -1159,6 +1168,8 @@ if not Root or not Humanoid then
 KeyPressTimer = 0
 AirborneTimer = 0
 AirbornePaused = false
+StuckTimer = 0
+EscapeTargetPosition = nil
 return
 end
 
@@ -1179,8 +1190,47 @@ end
 
 if AirbornePaused then
 KeyPressTimer = 0
+StuckTimer = 0
+EscapeTargetPosition = nil
 StopFollowing()
 return
+end
+
+local IsOverlapping = IsTouchingWall or not IsPositionClear(Character, Root, Root.Position)
+
+if IsOverlapping then
+StuckTimer = StuckTimer + DeltaTime
+if StuckTimer >= STUCK_ESCAPE_THRESHOLD and not EscapeTargetPosition then
+EscapeTargetPosition = FindNearestClearOutsidePosition(Character, Root)
+end
+else
+StuckTimer = 0
+EscapeTargetPosition = nil
+end
+
+if EscapeTargetPosition then
+if not CurrentMover or CurrentMover.Parent ~= Root then
+if CurrentMover then
+CurrentMover:Destroy()
+end
+
+CurrentMover = Instance.new("BodyVelocity")
+CurrentMover.Name = "ChickenFollowVelocity"
+CurrentMover.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+CurrentMover.P = 12500
+CurrentMover.Velocity = Vector3.zero
+CurrentMover.Parent = Root
+end
+
+local EscapeDelta = EscapeTargetPosition - Root.Position
+if EscapeDelta.Magnitude > 1.2 then
+CurrentMover.Velocity = EscapeDelta.Unit * MAX_SPEED
+LastFarmPosition = Root.Position
+return
+else
+EscapeTargetPosition = nil
+StuckTimer = 0
+end
 end
 
 RefreshTimer = RefreshTimer + DeltaTime
@@ -1249,13 +1299,6 @@ KeyPressTimer = 0
 end
 
 local FlyPosition = TargetPosition
-if not IsItemTarget then
-local enemyBottomY = GetEnemyBottomY(CurrentTarget)
-local footOffset = GetPlayerFootBottomOffset(Character, Root, Humanoid)
-if enemyBottomY then
-FlyPosition = Vector3.new(TargetPosition.X, enemyBottomY + footOffset, TargetPosition.Z)
-end
-end
 
 if IsCharacterInAir(Character, Root, Humanoid) then
 local GroundY = FindNearestGroundY(Character, Root, Humanoid, Vector3.new(Root.Position.X, Root.Position.Y, Root.Position.Z))
