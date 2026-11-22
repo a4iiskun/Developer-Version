@@ -1,0 +1,330 @@
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+local DigEvent = ReplicatedStorage.Remotes.DigRequest
+local DisplayEvent = ReplicatedStorage.Remotes.AutoDisplay
+local InventoryEvent = ReplicatedStorage.Remotes.GetInventory
+local SellAllEvent = ReplicatedStorage.Remotes.SellAll
+
+if playerGui:FindFirstChild("BattleScriptGUI") then
+	playerGui.BattleScriptGUI:Destroy()
+end
+
+local savedPosition = nil
+local autoDigEnabled = false
+local autoDigLoopId = 0
+local Direction = Vector3.new(0.68324971199035645, -0.41061931848526001, 0.60378938913345337)
+local sellAllReturnConnection = nil
+local pendingReturnCFrame = nil
+
+local function returnToOriginalPosition()
+	if not pendingReturnCFrame then return end
+
+	local targetCFrame = pendingReturnCFrame
+	pendingReturnCFrame = nil
+
+	if sellAllReturnConnection then
+		sellAllReturnConnection:Disconnect()
+		sellAllReturnConnection = nil
+	end
+
+	local currentChar = player.Character
+	local currentRoot = currentChar and currentChar:FindFirstChild("HumanoidRootPart")
+	if currentChar and currentChar.Parent and currentRoot and currentRoot.Parent then
+		for i = 1, 3 do
+			currentRoot.CFrame = targetCFrame
+			task.wait()
+		end
+	end
+end
+
+if typeof(hookmetamethod) == "function" then
+	local oldNamecall
+	oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+		local method = getnamecallmethod()
+		if self == SellAllEvent and (method == "FireServer" or method == "InvokeServer") and pendingReturnCFrame then
+			task.defer(returnToOriginalPosition)
+		end
+		return oldNamecall(self, ...)
+	end)
+end
+
+if playerGui:FindFirstChild("BattleScriptGUI") then
+	playerGui.BattleScriptGUI:Destroy()
+end
+
+local function applyButtonStyle(button)
+	button.BorderSizePixel = 0
+	button.AutoButtonColor = false
+	button.Font = Enum.Font.GothamMedium
+	button.TextColor3 = Color3.fromRGB(235, 235, 235)
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 4)
+	corner.Parent = button
+
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = Color3.fromRGB(58, 58, 58)
+	stroke.Thickness = 1
+	stroke.Parent = button
+end
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "BattleScriptGUI"
+gui.ResetOnSpawn = false
+gui.Parent = playerGui
+gui.IgnoreGuiInset = true
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+gui.DisplayOrder = 999
+
+local openBtn = Instance.new("TextButton")
+openBtn.Parent = gui
+openBtn.Size = UDim2.new(0, 75, 0, 32)
+openBtn.Position = UDim2.new(0, 10, 0, 50)
+openBtn.Text = "OPEN"
+openBtn.BackgroundColor3 = Color3.fromRGB(42, 42, 42)
+openBtn.ZIndex = 50
+openBtn.TextSize = 14
+applyButtonStyle(openBtn)
+
+local frame = Instance.new("Frame")
+frame.Parent = gui
+frame.Size = UDim2.new(0, 240, 0, 225)
+frame.Position = UDim2.new(0, 95, 0, 50)
+frame.BackgroundColor3 = Color3.fromRGB(32, 32, 32)
+frame.Active = true
+frame.Draggable = true
+frame.Visible = false
+frame.ZIndex = 50
+
+local fCorner = Instance.new("UICorner")
+fCorner.CornerRadius = UDim.new(0, 4)
+fCorner.Parent = frame
+
+local fStroke = Instance.new("UIStroke")
+fStroke.Color = Color3.fromRGB(55, 55, 55)
+fStroke.Thickness = 1
+fStroke.Parent = frame
+
+local title = Instance.new("TextLabel")
+title.Parent = frame
+title.Size = UDim2.new(1, 0, 0, 42)
+title.BackgroundTransparency = 1
+title.Text = "Blox Loot"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.TextSize = 18
+title.Font = Enum.Font.GothamBold
+title.ZIndex = 51
+
+local autoDigBtn = Instance.new("TextButton")
+autoDigBtn.Parent = frame
+autoDigBtn.Size = UDim2.new(1, -20, 0, 36)
+autoDigBtn.Position = UDim2.new(0, 10, 0, 48)
+autoDigBtn.Text = "AutoDig : OFF"
+autoDigBtn.BackgroundColor3 = Color3.fromRGB(46, 46, 46)
+autoDigBtn.TextSize = 14
+autoDigBtn.ZIndex = 51
+applyButtonStyle(autoDigBtn)
+
+local displayBtn = Instance.new("TextButton")
+displayBtn.Parent = frame
+displayBtn.Size = UDim2.new(1, -20, 0, 36)
+displayBtn.Position = UDim2.new(0, 10, 0, 91)
+displayBtn.Text = "Display"
+displayBtn.BackgroundColor3 = Color3.fromRGB(46, 46, 46)
+displayBtn.TextSize = 14
+displayBtn.ZIndex = 51
+applyButtonStyle(displayBtn)
+
+local inventoryBtn = Instance.new("TextButton")
+inventoryBtn.Parent = frame
+inventoryBtn.Size = UDim2.new(1, -20, 0, 36)
+inventoryBtn.Position = UDim2.new(0, 10, 0, 134)
+inventoryBtn.Text = "Inventory"
+inventoryBtn.BackgroundColor3 = Color3.fromRGB(46, 46, 46)
+inventoryBtn.TextSize = 14
+inventoryBtn.ZIndex = 51
+applyButtonStyle(inventoryBtn)
+
+local respawnBtn = Instance.new("TextButton")
+respawnBtn.Parent = frame
+respawnBtn.Size = UDim2.new(1, -20, 0, 36)
+respawnBtn.Position = UDim2.new(0, 10, 0, 177)
+respawnBtn.Text = "Set Respawn"
+respawnBtn.BackgroundColor3 = Color3.fromRGB(46, 46, 46)
+respawnBtn.TextSize = 14
+respawnBtn.ZIndex = 51
+applyButtonStyle(respawnBtn)
+
+local systemMessage = Instance.new("Frame")
+systemMessage.Parent = gui
+systemMessage.AnchorPoint = Vector2.new(1, 1)
+systemMessage.Position = UDim2.new(1, 400, 1, -20)
+systemMessage.Size = UDim2.new(0, 300, 0, 65)
+systemMessage.BackgroundTransparency = 0.25
+systemMessage.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+systemMessage.ZIndex = 60
+systemMessage.ClipsDescendants = true
+
+local uiCorner = Instance.new("UICorner")
+uiCorner.CornerRadius = UDim.new(0, 6)
+uiCorner.Parent = systemMessage
+
+local uiStroke = Instance.new("UIStroke")
+uiStroke.Parent = systemMessage
+uiStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+uiStroke.Color = Color3.fromRGB(200, 200, 200)
+uiStroke.Transparency = 0.7
+uiStroke.Thickness = 1
+
+local mainText = Instance.new("TextLabel")
+mainText.Parent = systemMessage
+mainText.BackgroundTransparency = 1
+mainText.Size = UDim2.new(1, -30, 0, 20)
+mainText.Position = UDim2.new(0, 15, 0, 12)
+mainText.RichText = true
+mainText.Text = "GUI was successfully executed <font size='12' color='#FFFFFF'>(Standard Version 2)</font>"
+mainText.TextColor3 = Color3.fromRGB(255, 255, 255)
+mainText.TextSize = 16
+mainText.Font = Enum.Font.SourceSansBold
+mainText.TextXAlignment = Enum.TextXAlignment.Left
+mainText.ZIndex = 61
+
+local subTextLeft = Instance.new("TextLabel")
+subTextLeft.Parent = systemMessage
+subTextLeft.BackgroundTransparency = 1
+subTextLeft.Size = UDim2.new(1, -30, 0, 20)
+subTextLeft.Position = UDim2.new(0, 15, 0, 34)
+subTextLeft.Text = "made by h1xn"
+subTextLeft.TextColor3 = Color3.fromRGB(255, 255, 255)
+subTextLeft.TextSize = 14
+subTextLeft.Font = Enum.Font.SourceSans
+subTextLeft.TextXAlignment = Enum.TextXAlignment.Left
+subTextLeft.ZIndex = 61
+
+local tween = TweenService:Create(
+	systemMessage,
+	TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+	{Position = UDim2.new(1, -20, 1, -20)}
+)
+tween:Play()
+
+task.delay(4, function()
+	local tweenOut = TweenService:Create(
+		systemMessage,
+		TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.In),
+		{Position = UDim2.new(1, 400, 1, -20)}
+	)
+	tweenOut:Play()
+end)
+
+respawnBtn.MouseButton1Click:Connect(function()
+	local char = player.Character
+	if not char then return end
+
+	local root = char:FindFirstChild("HumanoidRootPart")
+	if not root then return end
+
+	savedPosition = root.Position
+
+	mainText.Text = "Position Saved"
+	subTextLeft.Text = string.format(
+		"X:%d Y:%d Z:%d",
+		math.floor(savedPosition.X),
+		math.floor(savedPosition.Y),
+		math.floor(savedPosition.Z)
+	)
+
+	TweenService:Create(
+		systemMessage,
+		TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+		{Position = UDim2.new(1, -20, 1, -20)}
+	):Play()
+
+	task.delay(3, function()
+		TweenService:Create(
+			systemMessage,
+			TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.In),
+			{Position = UDim2.new(1, 400, 1, -20)}
+		):Play()
+	end)
+end)
+
+local function SetAutoDig(Value)
+	autoDigEnabled = Value
+	autoDigLoopId += 1
+
+	autoDigBtn.Text = autoDigEnabled and "AutoDig : ON" or "AutoDig : OFF"
+	autoDigBtn.BackgroundColor3 = autoDigEnabled
+		and Color3.fromRGB(38, 55, 38)
+		or Color3.fromRGB(46, 46, 46)
+
+	if autoDigEnabled then
+		local CurrentLoopId = autoDigLoopId
+
+		task.spawn(function()
+			while autoDigEnabled and autoDigLoopId == CurrentLoopId do
+				local Character = player.Character
+				local Root = Character and Character:FindFirstChild("HumanoidRootPart")
+
+				if Root then
+					local ForwardPosition = Root.Position + Root.CFrame.LookVector * 5
+
+					DigEvent:FireServer(
+						ForwardPosition,
+						Direction
+					)
+				end
+
+				task.wait(0.01)
+			end
+		end)
+	end
+end
+
+autoDigBtn.MouseButton1Click:Connect(function()
+	SetAutoDig(not autoDigEnabled)
+end)
+
+displayBtn.MouseButton1Click:Connect(function()
+	DisplayEvent:InvokeServer("value")
+end)
+
+inventoryBtn.MouseButton1Click:Connect(function()
+	local char = player.Character
+	if not char then return end
+
+	local root = char:FindFirstChild("HumanoidRootPart")
+	if not root then return end
+
+	if sellAllReturnConnection then
+		sellAllReturnConnection:Disconnect()
+		sellAllReturnConnection = nil
+	end
+
+	pendingReturnCFrame = root.CFrame
+	root.CFrame = CFrame.new(673, 1, -23)
+
+	if SellAllEvent:IsA("RemoteEvent") then
+		sellAllReturnConnection = SellAllEvent.OnClientEvent:Connect(returnToOriginalPosition)
+	end
+end)
+
+openBtn.MouseButton1Click:Connect(function()
+	frame.Visible = not frame.Visible
+end)
+
+player.CharacterAdded:Connect(function(char)
+	local root = char:WaitForChild("HumanoidRootPart")
+
+	if savedPosition then
+		for i = 1, 5 do
+			root.CFrame = CFrame.new(savedPosition)
+			task.wait()
+		end
+	end
+end)
