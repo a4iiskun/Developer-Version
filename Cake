@@ -19,19 +19,43 @@ end
 local savedPosition = nil
 local autoDigEnabled = false
 local autoDigLoopId = 0
-local autoToiletEnabled = false
-local autoSellEnabled = false
+local autoToiletEnabled = true
+local autoSellEnabled = true
 local Direction = Vector3.new(0.68324971199035645, -0.41061931848526001, 0.60378938913345337)
 local toiletReturnCFrame = nil
 local toiletReturnId = 0
 local sellReturnCFrame = nil
 local sellReturnId = 0
+local sellAllReturnConnection = nil
 
 local function returnFromToiletPosition(expectedId)
 	if toiletReturnId ~= expectedId or not toiletReturnCFrame then return end
 
 	local targetCFrame = toiletReturnCFrame
 	toiletReturnCFrame = nil
+
+	local currentChar = player.Character
+	local currentRoot = currentChar and currentChar:FindFirstChild("HumanoidRootPart")
+	if currentChar and currentChar.Parent and currentRoot and currentRoot.Parent then
+		for i = 1, 3 do
+			currentRoot.CFrame = targetCFrame
+			task.wait()
+		end
+	end
+end
+
+local function returnFromSellPosition(expectedId)
+	if expectedId and sellReturnId ~= expectedId then return end
+	if not sellReturnCFrame then return end
+
+	local targetCFrame = sellReturnCFrame
+	sellReturnCFrame = nil
+	sellReturnId += 1
+
+	if sellAllReturnConnection then
+		sellAllReturnConnection:Disconnect()
+		sellAllReturnConnection = nil
+	end
 
 	local currentChar = player.Character
 	local currentRoot = currentChar and currentChar:FindFirstChild("HumanoidRootPart")
@@ -82,22 +106,6 @@ NotifyEvent.OnClientEvent:Connect(function(...)
 	checkTooFullPayload(...)
 end)
 
-local function returnFromSellPosition(expectedId)
-	if sellReturnId ~= expectedId or not sellReturnCFrame then return end
-
-	local targetCFrame = sellReturnCFrame
-	sellReturnCFrame = nil
-
-	local currentChar = player.Character
-	local currentRoot = currentChar and currentChar:FindFirstChild("HumanoidRootPart")
-	if currentChar and currentChar.Parent and currentRoot and currentRoot.Parent then
-		for i = 1, 3 do
-			currentRoot.CFrame = targetCFrame
-			task.wait()
-		end
-	end
-end
-
 local function triggerAutoSell()
 	if not autoSellEnabled then return end
 
@@ -106,6 +114,18 @@ local function triggerAutoSell()
 	if char and char.Parent and root and root.Parent then
 		sellReturnCFrame = root.CFrame
 		sellReturnId += 1
+		local currentId = sellReturnId
+
+		if sellAllReturnConnection then
+			sellAllReturnConnection:Disconnect()
+			sellAllReturnConnection = nil
+		end
+
+		if SellAllEvent:IsA("RemoteEvent") then
+			sellAllReturnConnection = SellAllEvent.OnClientEvent:Connect(function()
+				returnFromSellPosition(currentId)
+			end)
+		end
 	end
 
 	task.defer(function()
@@ -113,11 +133,17 @@ local function triggerAutoSell()
 	end)
 end
 
-local function onSellAllDetected()
-	if not autoSellEnabled or not sellReturnCFrame then return end
-	local currentId = sellReturnId
-	task.defer(function()
-		returnFromSellPosition(currentId)
+if typeof(hookmetamethod) == "function" then
+	local oldNamecall
+	oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+		local method = getnamecallmethod()
+		if self == SellAllEvent and (method == "FireServer" or method == "InvokeServer") and sellReturnCFrame then
+			local currentId = sellReturnId
+			task.defer(function()
+				returnFromSellPosition(currentId)
+			end)
+		end
+		return oldNamecall(self, ...)
 	end)
 end
 
@@ -131,24 +157,10 @@ if typeof(getconnections) == "function" and typeof(hookfunction) == "function" t
 			end)
 		end
 	end
-
-	for _, Connection in getconnections(SellAllEvent.OnClientEvent) do
-		if typeof(Connection.Function) == "function" then
-			local old
-			old = hookfunction(Connection.Function, function(...)
-				onSellAllDetected()
-				return old(...)
-			end)
-		end
-	end
 end
 
 BagFullPopupEvent.OnClientEvent:Connect(function()
 	triggerAutoSell()
-end)
-
-SellAllEvent.OnClientEvent:Connect(function()
-	onSellAllDetected()
 end)
 
 local function applyButtonStyle(button)
@@ -187,7 +199,7 @@ applyButtonStyle(openBtn)
 
 local frame = Instance.new("Frame")
 frame.Parent = gui
-frame.Size = UDim2.new(0, 240, 0, 311)
+frame.Size = UDim2.new(0, 240, 0, 268)
 frame.Position = UDim2.new(0, 95, 0, 50)
 frame.BackgroundColor3 = Color3.fromRGB(32, 32, 32)
 frame.Active = true
@@ -218,16 +230,36 @@ local autoDigBtn = Instance.new("TextButton")
 autoDigBtn.Parent = frame
 autoDigBtn.Size = UDim2.new(1, -20, 0, 36)
 autoDigBtn.Position = UDim2.new(0, 10, 0, 48)
-autoDigBtn.Text = "AutoDig : OFF"
-autoDigBtn.BackgroundColor3 = Color3.fromRGB(46, 46, 46)
+autoDigBtn.Text = "AutoDig : ON"
+autoDigBtn.BackgroundColor3 = Color3.fromRGB(38, 55, 38)
 autoDigBtn.TextSize = 14
 autoDigBtn.ZIndex = 51
 applyButtonStyle(autoDigBtn)
 
+local sellBtn = Instance.new("TextButton")
+sellBtn.Parent = frame
+sellBtn.Size = UDim2.new(1, -20, 0, 36)
+sellBtn.Position = UDim2.new(0, 10, 0, 91)
+sellBtn.Text = "Sell : ON"
+sellBtn.BackgroundColor3 = Color3.fromRGB(38, 55, 38)
+sellBtn.TextSize = 14
+sellBtn.ZIndex = 51
+applyButtonStyle(sellBtn)
+
+local toiletBtn = Instance.new("TextButton")
+toiletBtn.Parent = frame
+toiletBtn.Size = UDim2.new(1, -20, 0, 36)
+toiletBtn.Position = UDim2.new(0, 10, 0, 134)
+toiletBtn.Text = "Toilet : ON"
+toiletBtn.BackgroundColor3 = Color3.fromRGB(38, 55, 38)
+toiletBtn.TextSize = 14
+toiletBtn.ZIndex = 51
+applyButtonStyle(toiletBtn)
+
 local displayBtn = Instance.new("TextButton")
 displayBtn.Parent = frame
 displayBtn.Size = UDim2.new(1, -20, 0, 36)
-displayBtn.Position = UDim2.new(0, 10, 0, 91)
+displayBtn.Position = UDim2.new(0, 10, 0, 177)
 displayBtn.Text = "Display"
 displayBtn.BackgroundColor3 = Color3.fromRGB(46, 46, 46)
 displayBtn.TextSize = 14
@@ -237,32 +269,12 @@ applyButtonStyle(displayBtn)
 local respawnBtn = Instance.new("TextButton")
 respawnBtn.Parent = frame
 respawnBtn.Size = UDim2.new(1, -20, 0, 36)
-respawnBtn.Position = UDim2.new(0, 10, 0, 177)
+respawnBtn.Position = UDim2.new(0, 10, 0, 220)
 respawnBtn.Text = "Set Respawn"
 respawnBtn.BackgroundColor3 = Color3.fromRGB(46, 46, 46)
 respawnBtn.TextSize = 14
 respawnBtn.ZIndex = 51
 applyButtonStyle(respawnBtn)
-
-local toiletBtn = Instance.new("TextButton")
-toiletBtn.Parent = frame
-toiletBtn.Size = UDim2.new(1, -20, 0, 36)
-toiletBtn.Position = UDim2.new(0, 10, 0, 220)
-toiletBtn.Text = "Toilet : OFF"
-toiletBtn.BackgroundColor3 = Color3.fromRGB(46, 46, 46)
-toiletBtn.TextSize = 14
-toiletBtn.ZIndex = 51
-applyButtonStyle(toiletBtn)
-
-local sellBtn = Instance.new("TextButton")
-sellBtn.Parent = frame
-sellBtn.Size = UDim2.new(1, -20, 0, 36)
-sellBtn.Position = UDim2.new(0, 10, 0, 263)
-sellBtn.Text = "Sell : OFF"
-sellBtn.BackgroundColor3 = Color3.fromRGB(46, 46, 46)
-sellBtn.TextSize = 14
-sellBtn.ZIndex = 51
-applyButtonStyle(sellBtn)
 
 local systemMessage = Instance.new("Frame")
 systemMessage.Parent = gui
@@ -408,10 +420,6 @@ sellBtn.MouseButton1Click:Connect(function()
 	sellBtn.BackgroundColor3 = autoSellEnabled
 		and Color3.fromRGB(38, 55, 38)
 		or Color3.fromRGB(46, 46, 46)
-	if not autoSellEnabled then
-		sellReturnCFrame = nil
-		sellReturnId += 1
-	end
 end)
 
 displayBtn.MouseButton1Click:Connect(function()
@@ -432,3 +440,5 @@ player.CharacterAdded:Connect(function(char)
 		end
 	end
 end)
+
+SetAutoDig(true)
