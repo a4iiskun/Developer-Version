@@ -29,12 +29,28 @@ local lastJumpReq = 0
 local Direction = Vector3.new(0.68324971199035645, -0.41061931848526001, 0.60378938913345337)
 local toiletReturnCFrame = nil
 local toiletReturnId = 0
+local toiletSitConnection = nil
+local toiletSitPropConnection = nil
 local sellReturnCFrame = nil
 local sellReturnId = 0
 local sellAllReturnConnection = nil
 
+local function clearToiletSitConnection()
+	if toiletSitConnection then
+		toiletSitConnection:Disconnect()
+		toiletSitConnection = nil
+	end
+	if toiletSitPropConnection then
+		toiletSitPropConnection:Disconnect()
+		toiletSitPropConnection = nil
+	end
+end
+
 local function returnFromToiletPosition(expectedId)
+	if not autoToiletEnabled then return end
 	if toiletReturnId ~= expectedId or not toiletReturnCFrame then return end
+
+	clearToiletSitConnection()
 
 	local targetCFrame = toiletReturnCFrame
 	toiletReturnCFrame = nil
@@ -47,6 +63,55 @@ local function returnFromToiletPosition(expectedId)
 			task.wait()
 		end
 	end
+end
+
+local function scheduleToiletReturn(expectedId)
+	if not autoToiletEnabled then return end
+	if toiletReturnId ~= expectedId or not toiletReturnCFrame then return end
+
+	clearToiletSitConnection()
+	task.delay(3, function()
+		returnFromToiletPosition(expectedId)
+	end)
+end
+
+local function bindToiletSitReturn(expectedId)
+	clearToiletSitConnection()
+
+	local char = player.Character
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	if not hum then return end
+
+	local function tryTriggerSit()
+		if not autoToiletEnabled then
+			clearToiletSitConnection()
+			return
+		end
+		if toiletReturnId ~= expectedId or not toiletReturnCFrame then
+			clearToiletSitConnection()
+			return
+		end
+		if hum.Sit or hum:GetState() == Enum.HumanoidStateType.Seated then
+			scheduleToiletReturn(expectedId)
+		end
+	end
+
+	if hum.Sit or hum:GetState() == Enum.HumanoidStateType.Seated then
+		tryTriggerSit()
+		return
+	end
+
+	toiletSitConnection = hum.StateChanged:Connect(function(_, newState)
+		if newState == Enum.HumanoidStateType.Seated then
+			tryTriggerSit()
+		end
+	end)
+
+	toiletSitPropConnection = hum:GetPropertyChangedSignal("Sit"):Connect(function()
+		if hum.Sit then
+			tryTriggerSit()
+		end
+	end)
 end
 
 local function returnFromSellPosition(expectedId)
@@ -83,9 +148,7 @@ local function checkTooFullPayload(...)
 				toiletReturnCFrame = root.CFrame
 				toiletReturnId += 1
 				local currentId = toiletReturnId
-				task.delay(2, function()
-					returnFromToiletPosition(currentId)
-				end)
+				bindToiletSitReturn(currentId)
 			end
 			task.defer(function()
 				WarpEvent:FireServer("toilet")
@@ -454,6 +517,11 @@ end)
 
 toiletBtn.MouseButton1Click:Connect(function()
 	autoToiletEnabled = not autoToiletEnabled
+	if not autoToiletEnabled then
+		toiletReturnCFrame = nil
+		toiletReturnId += 1
+		clearToiletSitConnection()
+	end
 	toiletBtn.Text = autoToiletEnabled and "Toilet : ON" or "Toilet : OFF"
 	toiletBtn.BackgroundColor3 = autoToiletEnabled
 		and Color3.fromRGB(38, 55, 38)
