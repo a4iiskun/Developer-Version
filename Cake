@@ -6,6 +6,7 @@ end
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
+local ProximityPromptService = game:GetService("ProximityPromptService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local player = Players.LocalPlayer
@@ -21,7 +22,6 @@ if playerGui:FindFirstChild("BattleScriptGUI") then
 	playerGui.BattleScriptGUI:Destroy()
 end
 
-local savedPosition = nil
 local autoDigEnabled = false
 local autoDigLoopId = 0
 local autoToiletEnabled = true
@@ -40,6 +40,103 @@ local sellReturnCFrame = nil
 local sellReturnId = 0
 local sellAllReturnConnection = nil
 local sellCycleActive = false
+local promptOriginalDurations = {}
+local flushProcessing = {}
+local flushVisiblePrompts = {}
+
+local function applyPromptDuration(prompt)
+	if not prompt:IsA("ProximityPrompt") then
+		return
+	end
+	if promptOriginalDurations[prompt] == nil then
+		promptOriginalDurations[prompt] = prompt.HoldDuration
+	end
+	prompt.HoldDuration = 0
+end
+
+for _, inst in ipairs(game:GetDescendants()) do
+	applyPromptDuration(inst)
+end
+
+game.DescendantAdded:Connect(function(inst)
+	if inst:IsA("ProximityPrompt") then
+		task.defer(function()
+			if inst and inst.Parent then
+				applyPromptDuration(inst)
+			end
+		end)
+	end
+end)
+
+local function isFlushToiletPrompt(prompt)
+	return prompt:IsA("ProximityPrompt")
+		and prompt.ActionText == "Flush"
+		and prompt.ObjectText == "Toilet"
+end
+
+local function activateFlushToiletPrompt(prompt)
+	if not autoToiletEnabled or not isFlushToiletPrompt(prompt) then
+		return
+	end
+
+	if flushProcessing[prompt] then
+		return
+	end
+
+	flushProcessing[prompt] = true
+
+	task.spawn(function()
+		local startTime = os.clock()
+
+		while autoToiletEnabled
+			and flushVisiblePrompts[prompt]
+			and prompt.Parent
+			and prompt.Enabled
+			and isFlushToiletPrompt(prompt)
+			and os.clock() - startTime < 2 do
+
+			local remaining = 2 - (os.clock() - startTime)
+
+			prompt:InputHoldBegin()
+			task.wait(math.min(math.max(prompt.HoldDuration, 0.05), remaining))
+			prompt:InputHoldEnd()
+
+			if os.clock() - startTime < 2 then
+				task.wait(math.min(0.1, 2 - (os.clock() - startTime)))
+			end
+		end
+
+		if prompt.Parent then
+			prompt:InputHoldEnd()
+		end
+
+		flushProcessing[prompt] = nil
+	end)
+end
+
+local function triggerVisibleFlushPrompts()
+	if not autoToiletEnabled then
+		return
+	end
+	for prompt in pairs(flushVisiblePrompts) do
+		if prompt and prompt.Parent then
+			activateFlushToiletPrompt(prompt)
+		end
+	end
+end
+
+ProximityPromptService.PromptShown:Connect(function(prompt)
+	if isFlushToiletPrompt(prompt) then
+		flushVisiblePrompts[prompt] = true
+		if toiletReturnCFrame and autoToiletEnabled then
+			activateFlushToiletPrompt(prompt)
+		end
+	end
+end)
+
+ProximityPromptService.PromptHidden:Connect(function(prompt)
+	flushVisiblePrompts[prompt] = nil
+end)
 
 local function clearToiletSitConnection()
 	if toiletSitConnection then
@@ -166,6 +263,7 @@ local function checkTooFullPayload(...)
 						bindToiletSitReturn(currentId)
 					end
 					WarpEvent:FireServer("toilet")
+					triggerVisibleFlushPrompts()
 				end)
 			end
 			break
@@ -214,6 +312,9 @@ local function triggerAutoSell()
 
 	task.defer(function()
 		WarpEvent:FireServer("sell")
+		task.spawn(function()
+			DisplayEvent:InvokeServer("value")
+		end)
 	end)
 end
 
@@ -283,7 +384,7 @@ applyButtonStyle(openBtn)
 
 local frame = Instance.new("Frame")
 frame.Parent = gui
-frame.Size = UDim2.new(0, 240, 0, 268)
+frame.Size = UDim2.new(0, 240, 0, 225)
 frame.Position = UDim2.new(0, 95, 0, 50)
 frame.BackgroundColor3 = Color3.fromRGB(32, 32, 32)
 frame.Active = true
@@ -312,13 +413,13 @@ title.ZIndex = 51
 
 local scrollFrame = Instance.new("ScrollingFrame")
 scrollFrame.Parent = frame
-scrollFrame.Size = UDim2.new(1, -12, 0, 214)
+scrollFrame.Size = UDim2.new(1, -12, 0, 171)
 scrollFrame.Position = UDim2.new(0, 6, 0, 46)
 scrollFrame.BackgroundTransparency = 1
 scrollFrame.BorderSizePixel = 0
 scrollFrame.ScrollBarThickness = 4
 scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(90, 90, 90)
-scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 343)
+scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 257)
 scrollFrame.ZIndex = 51
 
 local autoDigBtn = Instance.new("TextButton")
@@ -351,30 +452,10 @@ toiletBtn.TextSize = 14
 toiletBtn.ZIndex = 52
 applyButtonStyle(toiletBtn)
 
-local displayBtn = Instance.new("TextButton")
-displayBtn.Parent = scrollFrame
-displayBtn.Size = UDim2.new(1, -10, 0, 36)
-displayBtn.Position = UDim2.new(0, 4, 0, 131)
-displayBtn.Text = "Display"
-displayBtn.BackgroundColor3 = Color3.fromRGB(46, 46, 46)
-displayBtn.TextSize = 14
-displayBtn.ZIndex = 52
-applyButtonStyle(displayBtn)
-
-local respawnBtn = Instance.new("TextButton")
-respawnBtn.Parent = scrollFrame
-respawnBtn.Size = UDim2.new(1, -10, 0, 36)
-respawnBtn.Position = UDim2.new(0, 4, 0, 174)
-respawnBtn.Text = "Set Respawn"
-respawnBtn.BackgroundColor3 = Color3.fromRGB(46, 46, 46)
-respawnBtn.TextSize = 14
-respawnBtn.ZIndex = 52
-applyButtonStyle(respawnBtn)
-
 local wsupBtn = Instance.new("TextButton")
 wsupBtn.Parent = scrollFrame
 wsupBtn.Size = UDim2.new(1, -10, 0, 36)
-wsupBtn.Position = UDim2.new(0, 4, 0, 217)
+wsupBtn.Position = UDim2.new(0, 4, 0, 131)
 wsupBtn.Text = "Wsup : ON"
 wsupBtn.BackgroundColor3 = Color3.fromRGB(38, 55, 38)
 wsupBtn.TextSize = 14
@@ -384,7 +465,7 @@ applyButtonStyle(wsupBtn)
 local infJumpBtn = Instance.new("TextButton")
 infJumpBtn.Parent = scrollFrame
 infJumpBtn.Size = UDim2.new(1, -10, 0, 36)
-infJumpBtn.Position = UDim2.new(0, 4, 0, 260)
+infJumpBtn.Position = UDim2.new(0, 4, 0, 174)
 infJumpBtn.Text = "Inf Jump : ON"
 infJumpBtn.BackgroundColor3 = Color3.fromRGB(38, 55, 38)
 infJumpBtn.TextSize = 14
@@ -394,7 +475,7 @@ applyButtonStyle(infJumpBtn)
 local nccamBtn = Instance.new("TextButton")
 nccamBtn.Parent = scrollFrame
 nccamBtn.Size = UDim2.new(1, -10, 0, 36)
-nccamBtn.Position = UDim2.new(0, 4, 0, 303)
+nccamBtn.Position = UDim2.new(0, 4, 0, 217)
 nccamBtn.Text = "nccam : ON"
 nccamBtn.BackgroundColor3 = Color3.fromRGB(38, 55, 38)
 nccamBtn.TextSize = 14
@@ -463,38 +544,6 @@ task.delay(4, function()
 	tweenOut:Play()
 end)
 
-respawnBtn.MouseButton1Click:Connect(function()
-	local char = player.Character
-	if not char then return end
-
-	local root = char:FindFirstChild("HumanoidRootPart")
-	if not root then return end
-
-	savedPosition = root.Position
-
-	mainText.Text = "Position Saved"
-	subTextLeft.Text = string.format(
-		"X:%d Y:%d Z:%d",
-		math.floor(savedPosition.X),
-		math.floor(savedPosition.Y),
-		math.floor(savedPosition.Z)
-	)
-
-	TweenService:Create(
-		systemMessage,
-		TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-		{Position = UDim2.new(1, -20, 1, -20)}
-	):Play()
-
-	task.delay(3, function()
-		TweenService:Create(
-			systemMessage,
-			TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.In),
-			{Position = UDim2.new(1, 400, 1, -20)}
-		):Play()
-	end)
-end)
-
 local function SetAutoDig(Value)
 	autoDigEnabled = Value
 	autoDigLoopId += 1
@@ -537,6 +586,11 @@ toiletBtn.MouseButton1Click:Connect(function()
 		toiletReturnCFrame = nil
 		toiletReturnId += 1
 		clearToiletSitConnection()
+		for prompt in pairs(flushProcessing) do
+			if prompt and prompt.Parent then
+				prompt:InputHoldEnd()
+			end
+		end
 	end
 	toiletBtn.Text = autoToiletEnabled and "Toilet : ON" or "Toilet : OFF"
 	toiletBtn.BackgroundColor3 = autoToiletEnabled
@@ -594,10 +648,6 @@ nccamBtn.MouseButton1Click:Connect(function()
 	end
 end)
 
-displayBtn.MouseButton1Click:Connect(function()
-	DisplayEvent:InvokeServer("value")
-end)
-
 openBtn.MouseButton1Click:Connect(function()
 	frame.Visible = not frame.Visible
 end)
@@ -632,17 +682,6 @@ task.spawn(function()
 			end
 		end
 		task.wait()
-	end
-end)
-
-player.CharacterAdded:Connect(function(char)
-	local root = char:WaitForChild("HumanoidRootPart")
-
-	if savedPosition then
-		for i = 1, 5 do
-			root.CFrame = CFrame.new(savedPosition)
-			task.wait()
-		end
 	end
 end)
 
