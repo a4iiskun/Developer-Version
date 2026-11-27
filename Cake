@@ -1,3 +1,8 @@
+local TARGET_GAME_ID = 10533638982
+if game.GameId ~= TARGET_GAME_ID then
+    return
+end
+
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
@@ -34,6 +39,7 @@ local toiletSitPropConnection = nil
 local sellReturnCFrame = nil
 local sellReturnId = 0
 local sellAllReturnConnection = nil
+local sellCycleActive = false
 
 local function clearToiletSitConnection()
 	if toiletSitConnection then
@@ -120,6 +126,7 @@ local function returnFromSellPosition(expectedId)
 
 	local targetCFrame = sellReturnCFrame
 	sellReturnCFrame = nil
+	sellCycleActive = false
 	sellReturnId += 1
 
 	if sellAllReturnConnection then
@@ -142,17 +149,25 @@ local function checkTooFullPayload(...)
 	for i = 1, select("#", ...) do
 		local arg = select(i, ...)
 		if typeof(arg) == "table" and arg.key == "msg_too_full" then
+			if toiletReturnCFrame then
+				break
+			end
 			local char = player.Character
 			local root = char and char:FindFirstChild("HumanoidRootPart")
 			if char and char.Parent and root and root.Parent then
-				toiletReturnCFrame = root.CFrame
 				toiletReturnId += 1
 				local currentId = toiletReturnId
-				bindToiletSitReturn(currentId)
+				task.defer(function()
+					if not autoToiletEnabled or toiletReturnId ~= currentId or toiletReturnCFrame then return end
+					local activeChar = player.Character
+					local activeRoot = activeChar and activeChar:FindFirstChild("HumanoidRootPart")
+					if activeChar and activeChar.Parent and activeRoot and activeRoot.Parent then
+						toiletReturnCFrame = activeRoot.CFrame
+						bindToiletSitReturn(currentId)
+					end
+					WarpEvent:FireServer("toilet")
+				end)
 			end
-			task.defer(function()
-				WarpEvent:FireServer("toilet")
-			end)
 			break
 		end
 	end
@@ -175,7 +190,8 @@ NotifyEvent.OnClientEvent:Connect(function(...)
 end)
 
 local function triggerAutoSell()
-	if not autoSellEnabled then return end
+	if not autoSellEnabled or sellCycleActive then return end
+	sellCycleActive = true
 
 	local char = player.Character
 	local root = char and char:FindFirstChild("HumanoidRootPart")
@@ -530,6 +546,15 @@ end)
 
 sellBtn.MouseButton1Click:Connect(function()
 	autoSellEnabled = not autoSellEnabled
+	if not autoSellEnabled then
+		sellCycleActive = false
+		sellReturnCFrame = nil
+		sellReturnId += 1
+		if sellAllReturnConnection then
+			sellAllReturnConnection:Disconnect()
+			sellAllReturnConnection = nil
+		end
+	end
 	sellBtn.Text = autoSellEnabled and "Sell : ON" or "Sell : OFF"
 	sellBtn.BackgroundColor3 = autoSellEnabled
 		and Color3.fromRGB(38, 55, 38)
