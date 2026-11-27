@@ -23,6 +23,8 @@ local autoToiletEnabled = true
 local autoSellEnabled = true
 local wsupEnabled = true
 local infJumpEnabled = true
+local nccamEnabled = true
+local originalOcclusionMode = player.DevCameraOcclusionMode
 local lastJumpReq = 0
 local Direction = Vector3.new(0.68324971199035645, -0.41061931848526001, 0.60378938913345337)
 local toiletReturnCFrame = nil
@@ -237,7 +239,7 @@ scrollFrame.BackgroundTransparency = 1
 scrollFrame.BorderSizePixel = 0
 scrollFrame.ScrollBarThickness = 4
 scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(90, 90, 90)
-scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 300)
+scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 343)
 scrollFrame.ZIndex = 51
 
 local autoDigBtn = Instance.new("TextButton")
@@ -309,6 +311,16 @@ infJumpBtn.BackgroundColor3 = Color3.fromRGB(38, 55, 38)
 infJumpBtn.TextSize = 14
 infJumpBtn.ZIndex = 52
 applyButtonStyle(infJumpBtn)
+
+local nccamBtn = Instance.new("TextButton")
+nccamBtn.Parent = scrollFrame
+nccamBtn.Size = UDim2.new(1, -10, 0, 36)
+nccamBtn.Position = UDim2.new(0, 4, 0, 303)
+nccamBtn.Text = "nccam : ON"
+nccamBtn.BackgroundColor3 = Color3.fromRGB(38, 55, 38)
+nccamBtn.TextSize = 14
+nccamBtn.ZIndex = 52
+applyButtonStyle(nccamBtn)
 
 local systemMessage = Instance.new("Frame")
 systemMessage.Parent = gui
@@ -472,6 +484,23 @@ infJumpBtn.MouseButton1Click:Connect(function()
 		or Color3.fromRGB(46, 46, 46)
 end)
 
+nccamBtn.MouseButton1Click:Connect(function()
+	nccamEnabled = not nccamEnabled
+	nccamBtn.Text = nccamEnabled and "nccam : ON" or "nccam : OFF"
+	nccamBtn.BackgroundColor3 = nccamEnabled
+		and Color3.fromRGB(38, 55, 38)
+		or Color3.fromRGB(46, 46, 46)
+
+	if nccamEnabled then
+		if player.DevCameraOcclusionMode ~= Enum.DevCameraOcclusionMode.Invisicam then
+			originalOcclusionMode = player.DevCameraOcclusionMode
+		end
+		player.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Invisicam
+	else
+		player.DevCameraOcclusionMode = originalOcclusionMode
+	end
+end)
+
 displayBtn.MouseButton1Click:Connect(function()
 	DisplayEvent:InvokeServer("value")
 end)
@@ -523,5 +552,12 @@ player.CharacterAdded:Connect(function(char)
 		end
 	end
 end)
+
+if nccamEnabled then
+	if player.DevCameraOcclusionMode ~= Enum.DevCameraOcclusionMode.Invisicam then
+		originalOcclusionMode = player.DevCameraOcclusionMode
+	end
+	player.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Invisicam
+end
 
 SetAutoDig(true)
