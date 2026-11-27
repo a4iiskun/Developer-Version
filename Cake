@@ -7,8 +7,10 @@ local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 local DigEvent = ReplicatedStorage.Remotes.DigRequest
 local DisplayEvent = ReplicatedStorage.Remotes.AutoDisplay
-local InventoryEvent = ReplicatedStorage.Remotes.GetInventory
 local SellAllEvent = ReplicatedStorage.Remotes.SellAll
+local NotifyEvent = ReplicatedStorage.Remotes.Notify
+local WarpEvent = ReplicatedStorage.Remotes.WarpRequest
+local BagFullPopupEvent = ReplicatedStorage.Remotes.BagFullPopup
 
 if playerGui:FindFirstChild("BattleScriptGUI") then
 	playerGui.BattleScriptGUI:Destroy()
@@ -17,20 +19,19 @@ end
 local savedPosition = nil
 local autoDigEnabled = false
 local autoDigLoopId = 0
+local autoToiletEnabled = false
+local autoSellEnabled = false
 local Direction = Vector3.new(0.68324971199035645, -0.41061931848526001, 0.60378938913345337)
-local sellAllReturnConnection = nil
-local pendingReturnCFrame = nil
+local toiletReturnCFrame = nil
+local toiletReturnId = 0
+local sellReturnCFrame = nil
+local sellReturnId = 0
 
-local function returnToOriginalPosition()
-	if not pendingReturnCFrame then return end
+local function returnFromToiletPosition(expectedId)
+	if toiletReturnId ~= expectedId or not toiletReturnCFrame then return end
 
-	local targetCFrame = pendingReturnCFrame
-	pendingReturnCFrame = nil
-
-	if sellAllReturnConnection then
-		sellAllReturnConnection:Disconnect()
-		sellAllReturnConnection = nil
-	end
+	local targetCFrame = toiletReturnCFrame
+	toiletReturnCFrame = nil
 
 	local currentChar = player.Character
 	local currentRoot = currentChar and currentChar:FindFirstChild("HumanoidRootPart")
@@ -42,20 +43,113 @@ local function returnToOriginalPosition()
 	end
 end
 
-if typeof(hookmetamethod) == "function" then
-	local oldNamecall
-	oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
-		local method = getnamecallmethod()
-		if self == SellAllEvent and (method == "FireServer" or method == "InvokeServer") and pendingReturnCFrame then
-			task.defer(returnToOriginalPosition)
+local function checkTooFullPayload(...)
+	if not autoToiletEnabled then return end
+	for i = 1, select("#", ...) do
+		local arg = select(i, ...)
+		if typeof(arg) == "table" and arg.key == "msg_too_full" then
+			local char = player.Character
+			local root = char and char:FindFirstChild("HumanoidRootPart")
+			if char and char.Parent and root and root.Parent then
+				toiletReturnCFrame = root.CFrame
+				toiletReturnId += 1
+				local currentId = toiletReturnId
+				task.delay(2, function()
+					returnFromToiletPosition(currentId)
+				end)
+			end
+			task.defer(function()
+				WarpEvent:FireServer("toilet")
+			end)
+			break
 		end
-		return oldNamecall(self, ...)
+	end
+end
+
+if typeof(getconnections) == "function" and typeof(hookfunction) == "function" then
+	for _, Connection in getconnections(NotifyEvent.OnClientEvent) do
+		if typeof(Connection.Function) == "function" then
+			local old
+			old = hookfunction(Connection.Function, function(...)
+				checkTooFullPayload(...)
+				return old(...)
+			end)
+		end
+	end
+end
+
+NotifyEvent.OnClientEvent:Connect(function(...)
+	checkTooFullPayload(...)
+end)
+
+local function returnFromSellPosition(expectedId)
+	if sellReturnId ~= expectedId or not sellReturnCFrame then return end
+
+	local targetCFrame = sellReturnCFrame
+	sellReturnCFrame = nil
+
+	local currentChar = player.Character
+	local currentRoot = currentChar and currentChar:FindFirstChild("HumanoidRootPart")
+	if currentChar and currentChar.Parent and currentRoot and currentRoot.Parent then
+		for i = 1, 3 do
+			currentRoot.CFrame = targetCFrame
+			task.wait()
+		end
+	end
+end
+
+local function triggerAutoSell()
+	if not autoSellEnabled then return end
+
+	local char = player.Character
+	local root = char and char:FindFirstChild("HumanoidRootPart")
+	if char and char.Parent and root and root.Parent then
+		sellReturnCFrame = root.CFrame
+		sellReturnId += 1
+	end
+
+	task.defer(function()
+		WarpEvent:FireServer("sell")
 	end)
 end
 
-if playerGui:FindFirstChild("BattleScriptGUI") then
-	playerGui.BattleScriptGUI:Destroy()
+local function onSellAllDetected()
+	if not autoSellEnabled or not sellReturnCFrame then return end
+	local currentId = sellReturnId
+	task.defer(function()
+		returnFromSellPosition(currentId)
+	end)
 end
+
+if typeof(getconnections) == "function" and typeof(hookfunction) == "function" then
+	for _, Connection in getconnections(BagFullPopupEvent.OnClientEvent) do
+		if typeof(Connection.Function) == "function" then
+			local old
+			old = hookfunction(Connection.Function, function(...)
+				triggerAutoSell()
+				return old(...)
+			end)
+		end
+	end
+
+	for _, Connection in getconnections(SellAllEvent.OnClientEvent) do
+		if typeof(Connection.Function) == "function" then
+			local old
+			old = hookfunction(Connection.Function, function(...)
+				onSellAllDetected()
+				return old(...)
+			end)
+		end
+	end
+end
+
+BagFullPopupEvent.OnClientEvent:Connect(function()
+	triggerAutoSell()
+end)
+
+SellAllEvent.OnClientEvent:Connect(function()
+	onSellAllDetected()
+end)
 
 local function applyButtonStyle(button)
 	button.BorderSizePixel = 0
@@ -93,7 +187,7 @@ applyButtonStyle(openBtn)
 
 local frame = Instance.new("Frame")
 frame.Parent = gui
-frame.Size = UDim2.new(0, 240, 0, 225)
+frame.Size = UDim2.new(0, 240, 0, 311)
 frame.Position = UDim2.new(0, 95, 0, 50)
 frame.BackgroundColor3 = Color3.fromRGB(32, 32, 32)
 frame.Active = true
@@ -140,16 +234,6 @@ displayBtn.TextSize = 14
 displayBtn.ZIndex = 51
 applyButtonStyle(displayBtn)
 
-local inventoryBtn = Instance.new("TextButton")
-inventoryBtn.Parent = frame
-inventoryBtn.Size = UDim2.new(1, -20, 0, 36)
-inventoryBtn.Position = UDim2.new(0, 10, 0, 134)
-inventoryBtn.Text = "Inventory"
-inventoryBtn.BackgroundColor3 = Color3.fromRGB(46, 46, 46)
-inventoryBtn.TextSize = 14
-inventoryBtn.ZIndex = 51
-applyButtonStyle(inventoryBtn)
-
 local respawnBtn = Instance.new("TextButton")
 respawnBtn.Parent = frame
 respawnBtn.Size = UDim2.new(1, -20, 0, 36)
@@ -159,6 +243,26 @@ respawnBtn.BackgroundColor3 = Color3.fromRGB(46, 46, 46)
 respawnBtn.TextSize = 14
 respawnBtn.ZIndex = 51
 applyButtonStyle(respawnBtn)
+
+local toiletBtn = Instance.new("TextButton")
+toiletBtn.Parent = frame
+toiletBtn.Size = UDim2.new(1, -20, 0, 36)
+toiletBtn.Position = UDim2.new(0, 10, 0, 220)
+toiletBtn.Text = "Toilet : OFF"
+toiletBtn.BackgroundColor3 = Color3.fromRGB(46, 46, 46)
+toiletBtn.TextSize = 14
+toiletBtn.ZIndex = 51
+applyButtonStyle(toiletBtn)
+
+local sellBtn = Instance.new("TextButton")
+sellBtn.Parent = frame
+sellBtn.Size = UDim2.new(1, -20, 0, 36)
+sellBtn.Position = UDim2.new(0, 10, 0, 263)
+sellBtn.Text = "Sell : OFF"
+sellBtn.BackgroundColor3 = Color3.fromRGB(46, 46, 46)
+sellBtn.TextSize = 14
+sellBtn.ZIndex = 51
+applyButtonStyle(sellBtn)
 
 local systemMessage = Instance.new("Frame")
 systemMessage.Parent = gui
@@ -290,28 +394,28 @@ autoDigBtn.MouseButton1Click:Connect(function()
 	SetAutoDig(not autoDigEnabled)
 end)
 
-displayBtn.MouseButton1Click:Connect(function()
-	DisplayEvent:InvokeServer("value")
+toiletBtn.MouseButton1Click:Connect(function()
+	autoToiletEnabled = not autoToiletEnabled
+	toiletBtn.Text = autoToiletEnabled and "Toilet : ON" or "Toilet : OFF"
+	toiletBtn.BackgroundColor3 = autoToiletEnabled
+		and Color3.fromRGB(38, 55, 38)
+		or Color3.fromRGB(46, 46, 46)
 end)
 
-inventoryBtn.MouseButton1Click:Connect(function()
-	local char = player.Character
-	if not char then return end
-
-	local root = char:FindFirstChild("HumanoidRootPart")
-	if not root then return end
-
-	if sellAllReturnConnection then
-		sellAllReturnConnection:Disconnect()
-		sellAllReturnConnection = nil
+sellBtn.MouseButton1Click:Connect(function()
+	autoSellEnabled = not autoSellEnabled
+	sellBtn.Text = autoSellEnabled and "Sell : ON" or "Sell : OFF"
+	sellBtn.BackgroundColor3 = autoSellEnabled
+		and Color3.fromRGB(38, 55, 38)
+		or Color3.fromRGB(46, 46, 46)
+	if not autoSellEnabled then
+		sellReturnCFrame = nil
+		sellReturnId += 1
 	end
+end)
 
-	pendingReturnCFrame = root.CFrame
-	root.CFrame = CFrame.new(673, 1, -23)
-
-	if SellAllEvent:IsA("RemoteEvent") then
-		sellAllReturnConnection = SellAllEvent.OnClientEvent:Connect(returnToOriginalPosition)
-	end
+displayBtn.MouseButton1Click:Connect(function()
+	DisplayEvent:InvokeServer("value")
 end)
 
 openBtn.MouseButton1Click:Connect(function()
