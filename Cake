@@ -43,6 +43,10 @@ local sellCycleActive = false
 local promptOriginalDurations = {}
 local flushProcessing = {}
 local flushVisiblePrompts = {}
+local SELL_TARGET_POSITION = Vector3.new(674, 2, -23)
+local SELL_TARGET_RADIUS = 5
+local postSellBusy = false
+local postSellLastClick = 0
 
 local function applyPromptDuration(prompt)
 	if not prompt:IsA("ProximityPrompt") then
@@ -241,6 +245,90 @@ local function returnFromSellPosition(expectedId)
 	end
 end
 
+local function isInSellRange()
+	local character = player.Character
+	if not character then
+		return false
+	end
+
+	local rootPart = character:FindFirstChild("HumanoidRootPart")
+	if not rootPart then
+		return false
+	end
+
+	return (rootPart.Position - SELL_TARGET_POSITION).Magnitude <= SELL_TARGET_RADIUS
+end
+
+local function findSellGuiButton()
+	for _, obj in ipairs(playerGui:GetDescendants()) do
+		if obj:IsA("TextButton") or obj:IsA("ImageButton") then
+			local text = ""
+
+			if obj:IsA("TextButton") then
+				text = obj.Text
+			end
+
+			if text == "" then
+				for _, child in ipairs(obj:GetDescendants()) do
+					if child:IsA("TextLabel") then
+						text = child.Text
+						if text ~= "" then
+							break
+						end
+					end
+				end
+			end
+
+			text = string.lower(text)
+
+			if string.find(text, "sell all", 1, true)
+			or string.find(text, "sell everything", 1, true) then
+				if obj.Visible and obj.Active then
+					return obj
+				end
+			end
+		end
+	end
+
+	return nil
+end
+
+local function clickSellGuiButton(button)
+	if not button or not button.Parent then
+		return
+	end
+
+	if not button.Visible or not button.Active then
+		return
+	end
+
+	if typeof(firesignal) == "function" then
+		pcall(function()
+			firesignal(button.Activated)
+		end)
+	end
+end
+
+local function runPostWarpSellLoop(expectedId)
+	task.wait(1)
+	local startClock = os.clock()
+	while autoSellEnabled and sellCycleActive and sellReturnId == expectedId and os.clock() - startClock < 10 do
+		if isInSellRange() and not postSellBusy and os.clock() - postSellLastClick >= 0.8 then
+			local success, button = pcall(findSellGuiButton)
+			if success and button then
+				postSellBusy = true
+				postSellLastClick = os.clock()
+				pcall(function()
+					clickSellGuiButton(button)
+				end)
+				task.wait(0.8)
+				postSellBusy = false
+			end
+		end
+		task.wait(0.15)
+	end
+end
+
 local function checkTooFullPayload(...)
 	if not autoToiletEnabled then return end
 	for i = 1, select("#", ...) do
@@ -291,12 +379,13 @@ local function triggerAutoSell()
 	if not autoSellEnabled or sellCycleActive then return end
 	sellCycleActive = true
 
+	local currentId = sellReturnId
 	local char = player.Character
 	local root = char and char:FindFirstChild("HumanoidRootPart")
 	if char and char.Parent and root and root.Parent then
 		sellReturnCFrame = root.CFrame
 		sellReturnId += 1
-		local currentId = sellReturnId
+		currentId = sellReturnId
 
 		if sellAllReturnConnection then
 			sellAllReturnConnection:Disconnect()
@@ -314,6 +403,9 @@ local function triggerAutoSell()
 		WarpEvent:FireServer("sell")
 		task.spawn(function()
 			DisplayEvent:InvokeServer("value")
+		end)
+		task.spawn(function()
+			runPostWarpSellLoop(currentId)
 		end)
 	end)
 end
