@@ -321,7 +321,7 @@ local function runPostWarpSellLoop(expectedId)
 				pcall(function()
 					clickSellGuiButton(button)
 				end)
-				task.wait(0.8)
+				task.wait(0.3)
 				postSellBusy = false
 			end
 		end
@@ -402,7 +402,12 @@ local function triggerAutoSell()
 	task.defer(function()
 		WarpEvent:FireServer("sell")
 		task.spawn(function()
-			DisplayEvent:InvokeServer("value")
+			for i = 1, 3 do
+				DisplayEvent:InvokeServer("value")
+				if i < 3 then
+					task.wait(0.1)
+				end
+			end
 		end)
 		task.spawn(function()
 			runPostWarpSellLoop(currentId)
