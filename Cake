@@ -21,6 +21,9 @@ local autoDigEnabled = false
 local autoDigLoopId = 0
 local autoToiletEnabled = true
 local autoSellEnabled = true
+local wsupEnabled = true
+local infJumpEnabled = true
+local lastJumpReq = 0
 local Direction = Vector3.new(0.68324971199035645, -0.41061931848526001, 0.60378938913345337)
 local toiletReturnCFrame = nil
 local toiletReturnId = 0
@@ -226,55 +229,86 @@ title.TextSize = 18
 title.Font = Enum.Font.GothamBold
 title.ZIndex = 51
 
+local scrollFrame = Instance.new("ScrollingFrame")
+scrollFrame.Parent = frame
+scrollFrame.Size = UDim2.new(1, -12, 0, 214)
+scrollFrame.Position = UDim2.new(0, 6, 0, 46)
+scrollFrame.BackgroundTransparency = 1
+scrollFrame.BorderSizePixel = 0
+scrollFrame.ScrollBarThickness = 4
+scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(90, 90, 90)
+scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 300)
+scrollFrame.ZIndex = 51
+
 local autoDigBtn = Instance.new("TextButton")
-autoDigBtn.Parent = frame
-autoDigBtn.Size = UDim2.new(1, -20, 0, 36)
-autoDigBtn.Position = UDim2.new(0, 10, 0, 48)
+autoDigBtn.Parent = scrollFrame
+autoDigBtn.Size = UDim2.new(1, -10, 0, 36)
+autoDigBtn.Position = UDim2.new(0, 4, 0, 2)
 autoDigBtn.Text = "AutoDig : ON"
 autoDigBtn.BackgroundColor3 = Color3.fromRGB(38, 55, 38)
 autoDigBtn.TextSize = 14
-autoDigBtn.ZIndex = 51
+autoDigBtn.ZIndex = 52
 applyButtonStyle(autoDigBtn)
 
 local sellBtn = Instance.new("TextButton")
-sellBtn.Parent = frame
-sellBtn.Size = UDim2.new(1, -20, 0, 36)
-sellBtn.Position = UDim2.new(0, 10, 0, 91)
+sellBtn.Parent = scrollFrame
+sellBtn.Size = UDim2.new(1, -10, 0, 36)
+sellBtn.Position = UDim2.new(0, 4, 0, 45)
 sellBtn.Text = "Sell : ON"
 sellBtn.BackgroundColor3 = Color3.fromRGB(38, 55, 38)
 sellBtn.TextSize = 14
-sellBtn.ZIndex = 51
+sellBtn.ZIndex = 52
 applyButtonStyle(sellBtn)
 
 local toiletBtn = Instance.new("TextButton")
-toiletBtn.Parent = frame
-toiletBtn.Size = UDim2.new(1, -20, 0, 36)
-toiletBtn.Position = UDim2.new(0, 10, 0, 134)
+toiletBtn.Parent = scrollFrame
+toiletBtn.Size = UDim2.new(1, -10, 0, 36)
+toiletBtn.Position = UDim2.new(0, 4, 0, 88)
 toiletBtn.Text = "Toilet : ON"
 toiletBtn.BackgroundColor3 = Color3.fromRGB(38, 55, 38)
 toiletBtn.TextSize = 14
-toiletBtn.ZIndex = 51
+toiletBtn.ZIndex = 52
 applyButtonStyle(toiletBtn)
 
 local displayBtn = Instance.new("TextButton")
-displayBtn.Parent = frame
-displayBtn.Size = UDim2.new(1, -20, 0, 36)
-displayBtn.Position = UDim2.new(0, 10, 0, 177)
+displayBtn.Parent = scrollFrame
+displayBtn.Size = UDim2.new(1, -10, 0, 36)
+displayBtn.Position = UDim2.new(0, 4, 0, 131)
 displayBtn.Text = "Display"
 displayBtn.BackgroundColor3 = Color3.fromRGB(46, 46, 46)
 displayBtn.TextSize = 14
-displayBtn.ZIndex = 51
+displayBtn.ZIndex = 52
 applyButtonStyle(displayBtn)
 
 local respawnBtn = Instance.new("TextButton")
-respawnBtn.Parent = frame
-respawnBtn.Size = UDim2.new(1, -20, 0, 36)
-respawnBtn.Position = UDim2.new(0, 10, 0, 220)
+respawnBtn.Parent = scrollFrame
+respawnBtn.Size = UDim2.new(1, -10, 0, 36)
+respawnBtn.Position = UDim2.new(0, 4, 0, 174)
 respawnBtn.Text = "Set Respawn"
 respawnBtn.BackgroundColor3 = Color3.fromRGB(46, 46, 46)
 respawnBtn.TextSize = 14
-respawnBtn.ZIndex = 51
+respawnBtn.ZIndex = 52
 applyButtonStyle(respawnBtn)
+
+local wsupBtn = Instance.new("TextButton")
+wsupBtn.Parent = scrollFrame
+wsupBtn.Size = UDim2.new(1, -10, 0, 36)
+wsupBtn.Position = UDim2.new(0, 4, 0, 217)
+wsupBtn.Text = "Wsup : ON"
+wsupBtn.BackgroundColor3 = Color3.fromRGB(38, 55, 38)
+wsupBtn.TextSize = 14
+wsupBtn.ZIndex = 52
+applyButtonStyle(wsupBtn)
+
+local infJumpBtn = Instance.new("TextButton")
+infJumpBtn.Parent = scrollFrame
+infJumpBtn.Size = UDim2.new(1, -10, 0, 36)
+infJumpBtn.Position = UDim2.new(0, 4, 0, 260)
+infJumpBtn.Text = "Inf Jump : ON"
+infJumpBtn.BackgroundColor3 = Color3.fromRGB(38, 55, 38)
+infJumpBtn.TextSize = 14
+infJumpBtn.ZIndex = 52
+applyButtonStyle(infJumpBtn)
 
 local systemMessage = Instance.new("Frame")
 systemMessage.Parent = gui
@@ -422,12 +456,61 @@ sellBtn.MouseButton1Click:Connect(function()
 		or Color3.fromRGB(46, 46, 46)
 end)
 
+wsupBtn.MouseButton1Click:Connect(function()
+	wsupEnabled = not wsupEnabled
+	wsupBtn.Text = wsupEnabled and "Wsup : ON" or "Wsup : OFF"
+	wsupBtn.BackgroundColor3 = wsupEnabled
+		and Color3.fromRGB(38, 55, 38)
+		or Color3.fromRGB(46, 46, 46)
+end)
+
+infJumpBtn.MouseButton1Click:Connect(function()
+	infJumpEnabled = not infJumpEnabled
+	infJumpBtn.Text = infJumpEnabled and "Inf Jump : ON" or "Inf Jump : OFF"
+	infJumpBtn.BackgroundColor3 = infJumpEnabled
+		and Color3.fromRGB(38, 55, 38)
+		or Color3.fromRGB(46, 46, 46)
+end)
+
 displayBtn.MouseButton1Click:Connect(function()
 	DisplayEvent:InvokeServer("value")
 end)
 
 openBtn.MouseButton1Click:Connect(function()
 	frame.Visible = not frame.Visible
+end)
+
+UserInputService.JumpRequest:Connect(function()
+	if infJumpEnabled then
+		local char = player.Character
+		if char then
+			local hum = char:FindFirstChildOfClass("Humanoid")
+			if hum then
+				local now = os.clock()
+				if hum.FloorMaterial == Enum.Material.Air then
+					if now - lastJumpReq > 0.15 then
+						hum:ChangeState(Enum.HumanoidStateType.Jumping)
+					end
+				end
+				lastJumpReq = now
+			end
+		end
+	end
+end)
+
+task.spawn(function()
+	while true do
+		if wsupEnabled then
+			local char = player.Character
+			if char then
+				local hum = char:FindFirstChildOfClass("Humanoid")
+				if hum then
+					hum.WalkSpeed = 40
+				end
+			end
+		end
+		task.wait()
+	end
 end)
 
 player.CharacterAdded:Connect(function(char)
