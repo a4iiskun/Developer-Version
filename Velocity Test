@@ -4,6 +4,7 @@ local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 
 local TARGET_EMOTE_ID = "rbxassetid://16493298195"
+local AUTO_AIM_INTERVAL = 0.01
 
 local Enabled = false
 local EmoteActive = false
@@ -14,9 +15,16 @@ local ActiveTrack = nil
 local CurrentGeneration = 0
 local SavedHipHeight = nil
 local HipHeightModified = false
+local FallGuardActive = false
+local GuardFloorY = nil
 local BoundTracks = {}
 local EmoteGraceUntil = 0
 local LastJumpedTrack = nil
+local SelectedTargetPlayer = nil
+local HoldToken = 0
+local HoldTriggered = false
+local LastAutoAimTick = 0
+local CachedAutoAimVelocity = nil
 
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "FastThrowAccelGUI"
@@ -140,6 +148,125 @@ local InputCorner = Instance.new("UICorner")
 InputCorner.CornerRadius = UDim.new(0, 6)
 InputCorner.Parent = SpeedInput
 
+local function createListGui(titleText, pos)
+	local lg = Instance.new("Frame")
+	lg.Parent = ScreenGui
+	lg.Size = UDim2.new(0, 115, 0, 80)
+	lg.Position = pos
+	lg.BackgroundColor3 = Color3.fromRGB(24, 25, 28)
+	lg.Visible = false
+	lg.Active = true
+	lg.Draggable = true
+
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, 3)
+	c.Parent = lg
+
+	local s = Instance.new("UIStroke")
+	s.Color = Color3.fromRGB(52, 54, 58)
+	s.Thickness = 1
+	s.Parent = lg
+
+	local t = Instance.new("TextLabel")
+	t.Parent = lg
+	t.Size = UDim2.new(1, 0, 0, 20)
+	t.BackgroundTransparency = 1
+	t.Text = titleText
+	t.TextColor3 = Color3.fromRGB(255, 255, 255)
+	t.TextSize = 9
+	t.Font = Enum.Font.GothamBold
+
+	local sf = Instance.new("ScrollingFrame")
+	sf.Parent = lg
+	sf.Size = UDim2.new(1, -8, 1, -25)
+	sf.Position = UDim2.new(0, 4, 0, 20)
+	sf.BackgroundTransparency = 1
+	sf.ScrollBarThickness = 2
+	sf.ScrollBarImageColor3 = Color3.fromRGB(85, 85, 85)
+
+	local l = Instance.new("UIListLayout")
+	l.Parent = sf
+	l.Padding = UDim.new(0, 3)
+
+	l:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+		sf.CanvasSize = UDim2.new(0, 0, 0, l.AbsoluteContentSize.Y)
+		lg.Size = UDim2.new(0, 115, 0, math.min(l.AbsoluteContentSize.Y + 25, 105))
+	end)
+
+	return lg, sf
+end
+
+local PlayerListFrame, PlayerListScrollingFrame = createListGui("AutoAim Target", UDim2.new(0.5, 120, 0.5, -52))
+
+local function UpdateModeButtonText()
+	if AccelMode == "AutoAim" and SelectedTargetPlayer and SelectedTargetPlayer ~= LocalPlayer then
+		ModeButton.Text = "Mode: AutoAim (" .. SelectedTargetPlayer.DisplayName .. ")"
+	else
+		ModeButton.Text = "Mode: " .. AccelMode
+	end
+end
+
+local function createPlayerButton(plr)
+	if not plr or plr == LocalPlayer or not PlayerListScrollingFrame then
+		return
+	end
+	for _, child in ipairs(PlayerListScrollingFrame:GetChildren()) do
+		if child:IsA("TextButton") and child.Text == plr.DisplayName then
+			return
+		end
+	end
+	local btn = Instance.new("TextButton")
+	btn.Parent = PlayerListScrollingFrame
+	btn.Size = UDim2.new(1, 0, 0, 20)
+	btn.BackgroundColor3 = Color3.fromRGB(35, 36, 40)
+	btn.Text = plr.DisplayName
+	btn.TextColor3 = Color3.fromRGB(240, 240, 240)
+	btn.TextSize = 10
+	btn.Font = Enum.Font.GothamBold
+
+	local btnCorner = Instance.new("UICorner")
+	btnCorner.CornerRadius = UDim.new(0, 4)
+	btnCorner.Parent = btn
+
+	btn.MouseButton1Click:Connect(function()
+		if plr == LocalPlayer then
+			return
+		end
+		SelectedTargetPlayer = plr
+		AccelMode = "AutoAim"
+		LockedCFrame = nil
+		LastAutoAimTick = 0
+		CachedAutoAimVelocity = nil
+		UpdateModeButtonText()
+		PlayerListFrame.Visible = false
+	end)
+end
+
+for _, plr in pairs(Players:GetPlayers()) do
+	createPlayerButton(plr)
+end
+
+Players.PlayerAdded:Connect(function(plr)
+	if plr ~= LocalPlayer then
+		createPlayerButton(plr)
+	end
+end)
+
+Players.PlayerRemoving:Connect(function(plr)
+	if SelectedTargetPlayer == plr then
+		SelectedTargetPlayer = nil
+		CachedAutoAimVelocity = nil
+		if AccelMode == "AutoAim" then
+			UpdateModeButtonText()
+		end
+	end
+	for _, v in pairs(PlayerListScrollingFrame:GetChildren()) do
+		if v:IsA("TextButton") and v.Text == plr.DisplayName then
+			v:Destroy()
+		end
+	end
+end)
+
 local dragging, dragInput, dragStart, startPos
 MainFrame.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -177,15 +304,45 @@ OpenButton.MouseButton1Click:Connect(function()
 	OpenButton.Visible = false
 end)
 
+ModeButton.MouseButton1Down:Connect(function()
+	HoldToken += 1
+	local currentToken = HoldToken
+	HoldTriggered = false
+	task.delay(2, function()
+		if HoldToken == currentToken then
+			HoldTriggered = true
+			PlayerListFrame.Visible = not PlayerListFrame.Visible
+		end
+	end)
+end)
+
+ModeButton.MouseButton1Up:Connect(function()
+	HoldToken += 1
+end)
+
+ModeButton.MouseLeave:Connect(function()
+	HoldToken += 1
+end)
+
 ModeButton.MouseButton1Click:Connect(function()
+	if HoldTriggered then
+		HoldTriggered = false
+		return
+	end
 	if AccelMode == "Horizontal" then
 		AccelMode = "Downward"
 		LockedCFrame = nil
-		ModeButton.Text = "Mode: Downward"
+		CachedAutoAimVelocity = nil
+	elseif AccelMode == "Downward" then
+		AccelMode = "AutoAim"
+		LockedCFrame = nil
+		LastAutoAimTick = 0
+		CachedAutoAimVelocity = nil
 	else
 		AccelMode = "Horizontal"
-		ModeButton.Text = "Mode: Horizontal"
+		CachedAutoAimVelocity = nil
 	end
+	UpdateModeButtonText()
 end)
 
 SpeedInput.FocusLost:Connect(function()
@@ -210,6 +367,68 @@ end
 
 local TARGET_NORMALIZED_ID = NormalizeAnimId(TARGET_EMOTE_ID)
 
+local function GetTargetHRP()
+	if not SelectedTargetPlayer or SelectedTargetPlayer == LocalPlayer or not SelectedTargetPlayer.Parent then
+		return nil
+	end
+	local targetChar = SelectedTargetPlayer.Character
+	if not targetChar then
+		return nil
+	end
+	return targetChar:FindFirstChild("HumanoidRootPart")
+end
+
+local function SolveHitVelocity(fromPos, targetPos, speed)
+	local delta = targetPos - fromPos
+	if delta.Magnitude <= 0.01 then
+		return Vector3.zero
+	end
+	if speed <= 0.01 then
+		return Vector3.zero
+	end
+	local g = workspace.Gravity
+	if g <= 0.01 then
+		return delta.Unit * speed
+	end
+	local horizDelta = Vector3.new(delta.X, 0, delta.Z)
+	local horizDist = horizDelta.Magnitude
+	local dy = delta.Y
+	local v2 = speed * speed
+	local v4 = v2 * v2
+	local disc = v4 - g * (g * horizDist * horizDist + 2 * dy * v2)
+	if disc >= 0 and horizDist > 0.01 then
+		local root = math.sqrt(disc)
+		local tanTheta = (v2 - root) / (g * horizDist)
+		local cosTheta = 1 / math.sqrt(1 + tanTheta * tanTheta)
+		local sinTheta = tanTheta * cosTheta
+		local horizDir = horizDelta.Unit
+		return horizDir * (speed * cosTheta) + Vector3.new(0, speed * sinTheta, 0)
+	end
+	local travelTime = math.max(delta.Magnitude / speed, 0.01)
+	local vx = delta.X / travelTime
+	local vz = delta.Z / travelTime
+	local vy = (dy + 0.5 * g * travelTime * travelTime) / travelTime
+	local vel = Vector3.new(vx, vy, vz)
+	if vel.Magnitude > 0.01 then
+		return vel.Unit * speed
+	end
+	return delta.Unit * speed
+end
+
+local function ComputeAutoAimVelocity(fromPos, forceUpdate)
+	local now = os.clock()
+	if forceUpdate or (now - LastAutoAimTick) >= AUTO_AIM_INTERVAL or CachedAutoAimVelocity == nil then
+		LastAutoAimTick = now
+		local targetHrp = GetTargetHRP()
+		if targetHrp then
+			CachedAutoAimVelocity = SolveHitVelocity(fromPos, targetHrp.Position, ThrowMultiplier)
+		else
+			CachedAutoAimVelocity = nil
+		end
+	end
+	return CachedAutoAimVelocity
+end
+
 local function StopEmoteBoost(targetTrack)
 	if targetTrack and ActiveTrack and targetTrack ~= ActiveTrack then
 		return
@@ -219,6 +438,10 @@ local function StopEmoteBoost(targetTrack)
 	LockedCFrame = nil
 	ActiveTrack = nil
 	LastJumpedTrack = nil
+	LastAutoAimTick = 0
+	CachedAutoAimVelocity = nil
+	FallGuardActive = false
+	GuardFloorY = nil
 	local char = LocalPlayer.Character
 	local hrp = char and char:FindFirstChild("HumanoidRootPart")
 	local hum = char and char:FindFirstChildOfClass("Humanoid")
@@ -248,7 +471,7 @@ local function BeginEmoteGrace(targetTrack)
 end
 
 local function ActivateEmoteBoost(track, gen)
-	if gen ~= CurrentGeneration then
+	if not Enabled or gen ~= CurrentGeneration then
 		return
 	end
 	ActiveTrack = track
@@ -265,8 +488,12 @@ local function ActivateEmoteBoost(track, gen)
 		SavedHipHeight = hum.HipHeight
 		HipHeightModified = true
 		hum.HipHeight = 0
+		if hrp then
+			FallGuardActive = true
+			GuardFloorY = hrp.Position.Y
+		end
 	end
-	if Enabled and AccelMode ~= "Downward" and hrp and not LockedCFrame then
+	if Enabled and AccelMode == "Horizontal" and hrp and not LockedCFrame then
 		LockedCFrame = hrp.CFrame
 	end
 end
@@ -303,7 +530,7 @@ local function BindTrack(track, gen)
 	BoundTracks[track] = true
 
 	local function CheckAndHook()
-		if gen ~= CurrentGeneration then
+		if not Enabled or gen ~= CurrentGeneration then
 			return
 		end
 		if IsTargetTrackPlaying(track) then
@@ -365,7 +592,7 @@ local function BindAnimator(animator, gen)
 end
 
 local function ScanActiveCharacterTracks(gen)
-	if gen ~= CurrentGeneration then
+	if not Enabled or gen ~= CurrentGeneration then
 		return
 	end
 	local char = LocalPlayer.Character
@@ -414,6 +641,8 @@ local function BindCharacter(char)
 	table.clear(BoundTracks)
 	SavedHipHeight = nil
 	HipHeightModified = false
+	FallGuardActive = false
+	GuardFloorY = nil
 	StopEmoteBoost(nil)
 
 	if not char then
@@ -449,7 +678,10 @@ local function BindCharacter(char)
 end
 
 workspace.DescendantAdded:Connect(function(desc)
-	if not Enabled or not EmoteActive or AccelMode ~= "Downward" then
+	if not Enabled or not EmoteActive then
+		return
+	end
+	if AccelMode ~= "Downward" and AccelMode ~= "AutoAim" then
 		return
 	end
 	if not desc:IsA("BasePart") then
@@ -464,13 +696,23 @@ workspace.DescendantAdded:Connect(function(desc)
 		return
 	end
 	task.defer(function()
-		if not Enabled or not EmoteActive or AccelMode ~= "Downward" then
+		if not Enabled or not EmoteActive then
+			return
+		end
+		if AccelMode ~= "Downward" and AccelMode ~= "AutoAim" then
 			return
 		end
 		if desc.Parent and not desc.Anchored then
 			local currentHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 			if currentHrp and (desc.Position - currentHrp.Position).Magnitude <= 35 then
-				desc.AssemblyLinearVelocity = Vector3.new(0, -1, 0) * ThrowMultiplier
+				if AccelMode == "AutoAim" then
+					local aimVel = ComputeAutoAimVelocity(desc.Position, true)
+					if aimVel then
+						desc.AssemblyLinearVelocity = aimVel
+					end
+				else
+					desc.AssemblyLinearVelocity = Vector3.new(0, -1, 0) * ThrowMultiplier
+				end
 			end
 		end
 	end)
@@ -483,12 +725,14 @@ ToggleButton.MouseButton1Click:Connect(function()
 	if Enabled then
 		ToggleButton.Text = "Throw Boost: ON"
 		ToggleButton.TextColor3 = Color3.fromRGB(100, 255, 130)
-		if EmoteActive and AccelMode ~= "Downward" and hrp and not LockedCFrame then
+		ScanActiveCharacterTracks(CurrentGeneration)
+		if EmoteActive and AccelMode == "Horizontal" and hrp and not LockedCFrame then
 			LockedCFrame = hrp.CFrame
 		end
 	else
 		ToggleButton.Text = "Throw Boost: OFF"
 		ToggleButton.TextColor3 = Color3.fromRGB(255, 100, 100)
+		StopEmoteBoost(nil)
 		LockedCFrame = nil
 		if hrp then
 			hrp.AssemblyLinearVelocity = Vector3.zero
@@ -505,6 +749,13 @@ LocalPlayer.CharacterAdded:Connect(function(char)
 end)
 
 RunService.Heartbeat:Connect(function()
+	if not Enabled then
+		if EmoteActive or HipHeightModified then
+			StopEmoteBoost(nil)
+		end
+		return
+	end
+
 	ScanActiveCharacterTracks(CurrentGeneration)
 
 	if ActiveTrack and not ActiveTrack.IsPlaying then
@@ -516,7 +767,7 @@ RunService.Heartbeat:Connect(function()
 		return
 	end
 
-	if not Enabled or not EmoteActive then
+	if not EmoteActive then
 		return
 	end
 
@@ -525,7 +776,18 @@ RunService.Heartbeat:Connect(function()
 	local hum = char and char:FindFirstChildOfClass("Humanoid")
 	local camera = workspace.CurrentCamera
 	if hrp and hum then
-		if AccelMode ~= "Downward" then
+		if FallGuardActive and GuardFloorY ~= nil then
+			if hrp.Position.Y < GuardFloorY then
+				hrp.CFrame = CFrame.new(hrp.Position.X, GuardFloorY, hrp.Position.Z) * (hrp.CFrame - hrp.CFrame.Position)
+				if hrp.AssemblyLinearVelocity.Y < 0 then
+					hrp.AssemblyLinearVelocity = Vector3.new(hrp.AssemblyLinearVelocity.X, 0, hrp.AssemblyLinearVelocity.Z)
+				end
+			elseif hrp.AssemblyLinearVelocity.Y < 0 then
+				hrp.AssemblyLinearVelocity = Vector3.new(hrp.AssemblyLinearVelocity.X, 0, hrp.AssemblyLinearVelocity.Z)
+			end
+		end
+
+		if AccelMode == "Horizontal" then
 			if not LockedCFrame then
 				LockedCFrame = hrp.CFrame
 			end
@@ -534,14 +796,20 @@ RunService.Heartbeat:Connect(function()
 			elseif LockedCFrame then
 				hrp.CFrame = CFrame.new(LockedCFrame.Position) * (hrp.CFrame - hrp.CFrame.Position)
 			end
-		end
-		local camLook = camera and camera.CFrame.LookVector or hrp.CFrame.LookVector
-		local flatLook = Vector3.new(camLook.X, 0, camLook.Z)
-		local frontDir = flatLook.Magnitude > 0 and flatLook.Unit or Vector3.new(hrp.CFrame.LookVector.X, 0, hrp.CFrame.LookVector.Z).Unit
-		if AccelMode == "Downward" then
-			hrp.AssemblyLinearVelocity = Vector3.new(0, -1, 0) * ThrowMultiplier
-		else
+			local camLook = camera and camera.CFrame.LookVector or hrp.CFrame.LookVector
+			local flatLook = Vector3.new(camLook.X, 0, camLook.Z)
+			local frontDir = flatLook.Magnitude > 0 and flatLook.Unit or Vector3.new(hrp.CFrame.LookVector.X, 0, hrp.CFrame.LookVector.Z).Unit
 			hrp.AssemblyLinearVelocity = frontDir * ThrowMultiplier
+		elseif AccelMode == "AutoAim" then
+			local aimVel = ComputeAutoAimVelocity(hrp.Position, false)
+			if aimVel then
+				local horizAim = Vector3.new(aimVel.X, 0, aimVel.Z)
+				if horizAim.Magnitude > 0.01 then
+					hrp.AssemblyLinearVelocity = Vector3.new(horizAim.Unit.X * ThrowMultiplier, hrp.AssemblyLinearVelocity.Y, horizAim.Unit.Z * ThrowMultiplier)
+				end
+			end
+		else
+			hrp.AssemblyLinearVelocity = Vector3.new(0, -1, 0) * ThrowMultiplier
 		end
 	end
 end)
