@@ -1,0 +1,192 @@
+
+
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+if playerGui:FindFirstChild("AutoHandGUI") then
+    playerGui.AutoHandGUI:Destroy()
+end
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "AutoHandGUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.DisplayOrder = 999
+ScreenGui.Parent = playerGui
+
+local Main = Instance.new("Frame")
+Main.Size = UDim2.fromOffset(220, 125)
+Main.Position = UDim2.new(0.5, -110, 0.5, -62)
+Main.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+Main.BorderSizePixel = 0
+Main.Active = true
+Main.Parent = ScreenGui
+
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 12)
+MainCorner.Parent = Main
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 35)
+Title.BackgroundTransparency = 1
+Title.Text = "Auto Hand Click"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 17
+Title.Font = Enum.Font.GothamBold
+Title.Parent = Main
+
+local Toggle = Instance.new("TextButton")
+Toggle.Size = UDim2.new(1, -24, 0, 42)
+Toggle.Position = UDim2.fromOffset(12, 43)
+Toggle.BackgroundColor3 = Color3.fromRGB(170, 55, 55)
+Toggle.Text = "OFF"
+Toggle.TextColor3 = Color3.fromRGB(255, 255, 255)
+Toggle.TextSize = 16
+Toggle.Font = Enum.Font.GothamBold
+Toggle.Parent = Main
+
+local ToggleCorner = Instance.new("UICorner")
+ToggleCorner.CornerRadius = UDim.new(0, 8)
+ToggleCorner.Parent = Toggle
+
+local Hide = Instance.new("TextButton")
+Hide.Size = UDim2.new(1, -24, 0, 25)
+Hide.Position = UDim2.fromOffset(12, 90)
+Hide.BackgroundTransparency = 1
+Hide.Text = "HIDE"
+Hide.TextColor3 = Color3.fromRGB(180, 180, 180)
+Hide.TextSize = 12
+Hide.Font = Enum.Font.GothamBold
+Hide.Parent = Main
+
+local Open = Instance.new("TextButton")
+Open.Size = UDim2.fromOffset(65, 35)
+Open.Position = UDim2.new(0, 15, 0.5, 0)
+Open.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
+Open.Text = "OPEN"
+Open.TextColor3 = Color3.fromRGB(255, 255, 255)
+Open.TextSize = 13
+Open.Font = Enum.Font.GothamBold
+Open.Visible = false
+Open.Parent = ScreenGui
+
+local OpenCorner = Instance.new("UICorner")
+OpenCorner.CornerRadius = UDim.new(0, 8)
+OpenCorner.Parent = Open
+
+local enabled = false
+local dragging = false
+local dragInput
+local dragStart
+local startPosition
+
+local function updateDrag(input)
+    local delta = input.Position - dragStart
+    Main.Position = UDim2.new(
+        startPosition.X.Scale,
+        startPosition.X.Offset + delta.X,
+        startPosition.Y.Scale,
+        startPosition.Y.Offset + delta.Y
+    )
+end
+
+Main.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPosition = Main.Position
+
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+Main.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and input == dragInput then
+        updateDrag(input)
+    end
+end)
+
+Toggle.MouseButton1Click:Connect(function()
+    enabled = not enabled
+
+    if enabled then
+        Toggle.Text = "ON"
+        Toggle.BackgroundColor3 = Color3.fromRGB(45, 160, 85)
+    else
+        Toggle.Text = "OFF"
+        Toggle.BackgroundColor3 = Color3.fromRGB(170, 55, 55)
+    end
+end)
+
+Hide.MouseButton1Click:Connect(function()
+    Main.Visible = false
+    Open.Visible = true
+end)
+
+Open.MouseButton1Click:Connect(function()
+    Main.Visible = true
+    Open.Visible = false
+end)
+
+task.spawn(function()
+    while ScreenGui.Parent do
+        if enabled then
+            local camera = workspace.CurrentCamera
+            local viewport = camera.ViewportSize
+
+            local x = viewport.X * 0.96
+            local y = viewport.Y * 0.528
+            local position = Vector2.new(x, y)
+
+            local success = pcall(function()
+                VirtualInputManager:SendTouchEvent(
+                    1,
+                    Enum.UserInputState.Begin,
+                    position
+                )
+            end)
+
+            if not success then
+                pcall(function()
+                    VirtualInputManager:SendMouseButtonEvent(x, y, 0, true, game, 0)
+                end)
+
+                task.wait(0.05)
+
+                pcall(function()
+                    VirtualInputManager:SendMouseButtonEvent(x, y, 0, false, game, 0)
+                end)
+            else
+                task.wait(0.05)
+
+                pcall(function()
+                    VirtualInputManager:SendTouchEvent(
+                        1,
+                        Enum.UserInputState.End,
+                        position
+                    )
+                end)
+            end
+
+            task.wait(0.2)
+        else
+            task.wait(0.05)
+        end
+    end
+end)
+
+
