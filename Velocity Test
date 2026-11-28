@@ -7,12 +7,16 @@ local TARGET_EMOTE_ID = "rbxassetid://16493298195"
 
 local Enabled = false
 local EmoteActive = false
+local AccelMode = "Horizontal"
 local ThrowMultiplier = 150
 local LockedCFrame = nil
 local ActiveTrack = nil
 local CurrentGeneration = 0
 local SavedHipHeight = nil
 local HipHeightModified = false
+local BoundTracks = {}
+local EmoteGraceUntil = 0
+local LastJumpedTrack = nil
 
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "FastThrowAccelGUI"
@@ -21,8 +25,8 @@ ScreenGui.Parent = game:GetService("CoreGui")
 
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 220, 0, 135)
-MainFrame.Position = UDim2.new(0.5, -110, 0.5, -67)
+MainFrame.Size = UDim2.new(0, 220, 0, 173)
+MainFrame.Position = UDim2.new(0.5, -110, 0.5, -86)
 MainFrame.BackgroundColor3 = Color3.fromRGB(24, 25, 28)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
@@ -96,9 +100,23 @@ local ToggleCorner = Instance.new("UICorner")
 ToggleCorner.CornerRadius = UDim.new(0, 6)
 ToggleCorner.Parent = ToggleButton
 
+local ModeButton = Instance.new("TextButton")
+ModeButton.Size = UDim2.new(1, -20, 0, 30)
+ModeButton.Position = UDim2.new(0, 10, 0, 80)
+ModeButton.BackgroundColor3 = Color3.fromRGB(35, 36, 40)
+ModeButton.Text = "Mode: Horizontal"
+ModeButton.TextColor3 = Color3.fromRGB(180, 220, 255)
+ModeButton.TextSize = 13
+ModeButton.Font = Enum.Font.GothamBold
+ModeButton.Parent = MainFrame
+
+local ModeCorner = Instance.new("UICorner")
+ModeCorner.CornerRadius = UDim.new(0, 6)
+ModeCorner.Parent = ModeButton
+
 local SpeedLabel = Instance.new("TextLabel")
 SpeedLabel.Size = UDim2.new(0.5, -10, 0, 30)
-SpeedLabel.Position = UDim2.new(0, 10, 0, 82)
+SpeedLabel.Position = UDim2.new(0, 10, 0, 120)
 SpeedLabel.BackgroundTransparency = 1
 SpeedLabel.Text = "Velocity Power:"
 SpeedLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
@@ -109,7 +127,7 @@ SpeedLabel.Parent = MainFrame
 
 local SpeedInput = Instance.new("TextBox")
 SpeedInput.Size = UDim2.new(0.5, -15, 0, 30)
-SpeedInput.Position = UDim2.new(0.5, 5, 0, 82)
+SpeedInput.Position = UDim2.new(0.5, 5, 0, 120)
 SpeedInput.BackgroundColor3 = Color3.fromRGB(35, 36, 40)
 SpeedInput.Text = tostring(ThrowMultiplier)
 SpeedInput.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -159,6 +177,17 @@ OpenButton.MouseButton1Click:Connect(function()
 	OpenButton.Visible = false
 end)
 
+ModeButton.MouseButton1Click:Connect(function()
+	if AccelMode == "Horizontal" then
+		AccelMode = "Downward"
+		LockedCFrame = nil
+		ModeButton.Text = "Mode: Downward"
+	else
+		AccelMode = "Horizontal"
+		ModeButton.Text = "Mode: Horizontal"
+	end
+end)
+
 SpeedInput.FocusLost:Connect(function()
 	local num = tonumber(SpeedInput.Text)
 	if num and num >= 0 then
@@ -168,13 +197,28 @@ SpeedInput.FocusLost:Connect(function()
 	end
 end)
 
+local function NormalizeAnimId(id)
+	if type(id) ~= "string" then
+		return ""
+	end
+	local digits = string.match(id, "(%d+)%s*$")
+	if digits then
+		return "rbxassetid://" .. digits
+	end
+	return string.lower(id)
+end
+
+local TARGET_NORMALIZED_ID = NormalizeAnimId(TARGET_EMOTE_ID)
+
 local function StopEmoteBoost(targetTrack)
 	if targetTrack and ActiveTrack and targetTrack ~= ActiveTrack then
 		return
 	end
 	EmoteActive = false
+	EmoteGraceUntil = 0
 	LockedCFrame = nil
 	ActiveTrack = nil
+	LastJumpedTrack = nil
 	local char = LocalPlayer.Character
 	local hrp = char and char:FindFirstChild("HumanoidRootPart")
 	local hum = char and char:FindFirstChildOfClass("Humanoid")
@@ -190,60 +234,121 @@ local function StopEmoteBoost(targetTrack)
 	end
 end
 
+local function BeginEmoteGrace(targetTrack)
+	if targetTrack and ActiveTrack and targetTrack ~= ActiveTrack then
+		return
+	end
+	if not EmoteActive then
+		return
+	end
+	ActiveTrack = nil
+	if EmoteGraceUntil == 0 then
+		EmoteGraceUntil = os.clock() + 0.1
+	end
+end
+
 local function ActivateEmoteBoost(track, gen)
 	if gen ~= CurrentGeneration then
 		return
 	end
 	ActiveTrack = track
 	EmoteActive = true
+	EmoteGraceUntil = 0
 	local char = LocalPlayer.Character
 	local hrp = char and char:FindFirstChild("HumanoidRootPart")
 	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	if hum and LastJumpedTrack ~= track then
+		LastJumpedTrack = track
+		hum.Jump = true
+	end
 	if hum and not HipHeightModified then
 		SavedHipHeight = hum.HipHeight
 		HipHeightModified = true
 		hum.HipHeight = 0
 	end
-	if Enabled and hrp then
+	if Enabled and AccelMode ~= "Downward" and hrp and not LockedCFrame then
 		LockedCFrame = hrp.CFrame
 	end
 end
 
+local function IsTargetTrackPlaying(track)
+	if not track then
+		return false
+	end
+	local okPlaying, playing = pcall(function()
+		return track.IsPlaying
+	end)
+	if not okPlaying or not playing then
+		return false
+	end
+	local okAnim, anim = pcall(function()
+		return track.Animation
+	end)
+	if not okAnim or not anim then
+		return false
+	end
+	local okId, animId = pcall(function()
+		return anim.AnimationId
+	end)
+	if not okId or not animId or animId == "" then
+		return false
+	end
+	return NormalizeAnimId(animId) == TARGET_NORMALIZED_ID
+end
+
 local function BindTrack(track, gen)
-	if not track or gen ~= CurrentGeneration then
+	if not track or gen ~= CurrentGeneration or BoundTracks[track] then
 		return
 	end
+	BoundTracks[track] = true
 
 	local function CheckAndHook()
 		if gen ~= CurrentGeneration then
 			return
 		end
-		local anim = track.Animation
-		if anim and anim.AnimationId == TARGET_EMOTE_ID and track.IsPlaying then
+		if IsTargetTrackPlaying(track) then
 			ActivateEmoteBoost(track, gen)
-			track.Stopped:Once(function()
-				if gen == CurrentGeneration then
-					StopEmoteBoost(track)
-				end
-			end)
-			track.Ended:Once(function()
-				if gen == CurrentGeneration then
-					StopEmoteBoost(track)
-				end
-			end)
 		end
 	end
 
 	CheckAndHook()
+	task.defer(CheckAndHook)
 
-	if track.Animation then
-		track.Animation:GetPropertyChangedSignal("AnimationId"):Connect(CheckAndHook)
-	end
-	track:GetPropertyChangedSignal("Animation"):Connect(function()
-		CheckAndHook()
-		if track.Animation then
-			track.Animation:GetPropertyChangedSignal("AnimationId"):Connect(CheckAndHook)
+	pcall(function()
+		track.Stopped:Connect(function()
+			if gen == CurrentGeneration then
+				BeginEmoteGrace(track)
+			end
+		end)
+	end)
+
+	pcall(function()
+		track.Ended:Connect(function()
+			if gen == CurrentGeneration then
+				BeginEmoteGrace(track)
+			end
+		end)
+	end)
+
+	local hookedAnim = nil
+	local function HookAnimation(anim)
+		if not anim or hookedAnim == anim then
+			return
 		end
+		hookedAnim = anim
+		pcall(function()
+			anim:GetPropertyChangedSignal("AnimationId"):Connect(CheckAndHook)
+		end)
+	end
+
+	pcall(function()
+		if track.Animation then
+			HookAnimation(track.Animation)
+		end
+		track:GetPropertyChangedSignal("Animation"):Connect(function()
+			HookAnimation(track.Animation)
+			CheckAndHook()
+		end)
 	end)
 end
 
@@ -259,9 +364,54 @@ local function BindAnimator(animator, gen)
 	end)
 end
 
+local function ScanActiveCharacterTracks(gen)
+	if gen ~= CurrentGeneration then
+		return
+	end
+	local char = LocalPlayer.Character
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	if not hum then
+		return
+	end
+	if HipHeightModified and hum.HipHeight ~= 0 then
+		hum.HipHeight = 0
+	end
+	local animator = hum:FindFirstChildOfClass("Animator")
+	if not animator then
+		return
+	end
+	local playingTracks = animator:GetPlayingAnimationTracks()
+	local foundTarget = false
+	for _, track in ipairs(playingTracks) do
+		if not BoundTracks[track] then
+			BindTrack(track, gen)
+		end
+		if IsTargetTrackPlaying(track) then
+			foundTarget = true
+			if not EmoteActive or ActiveTrack ~= track or EmoteGraceUntil ~= 0 then
+				ActivateEmoteBoost(track, gen)
+			end
+		end
+	end
+	if EmoteActive and not foundTarget then
+		if ActiveTrack then
+			local stillPlaying = false
+			pcall(function()
+				stillPlaying = ActiveTrack.IsPlaying
+			end)
+			if not stillPlaying then
+				BeginEmoteGrace(ActiveTrack)
+			end
+		else
+			BeginEmoteGrace(nil)
+		end
+	end
+end
+
 local function BindCharacter(char)
 	CurrentGeneration += 1
 	local gen = CurrentGeneration
+	table.clear(BoundTracks)
 	SavedHipHeight = nil
 	HipHeightModified = false
 	StopEmoteBoost(nil)
@@ -298,6 +448,34 @@ local function BindCharacter(char)
 	end
 end
 
+workspace.DescendantAdded:Connect(function(desc)
+	if not Enabled or not EmoteActive or AccelMode ~= "Downward" then
+		return
+	end
+	if not desc:IsA("BasePart") then
+		return
+	end
+	local char = LocalPlayer.Character
+	if char and desc:IsDescendantOf(char) then
+		return
+	end
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+	if not hrp then
+		return
+	end
+	task.defer(function()
+		if not Enabled or not EmoteActive or AccelMode ~= "Downward" then
+			return
+		end
+		if desc.Parent and not desc.Anchored then
+			local currentHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+			if currentHrp and (desc.Position - currentHrp.Position).Magnitude <= 35 then
+				desc.AssemblyLinearVelocity = Vector3.new(0, -1, 0) * ThrowMultiplier
+			end
+		end
+	end)
+end)
+
 ToggleButton.MouseButton1Click:Connect(function()
 	Enabled = not Enabled
 	local char = LocalPlayer.Character
@@ -305,7 +483,7 @@ ToggleButton.MouseButton1Click:Connect(function()
 	if Enabled then
 		ToggleButton.Text = "Throw Boost: ON"
 		ToggleButton.TextColor3 = Color3.fromRGB(100, 255, 130)
-		if EmoteActive and hrp then
+		if EmoteActive and AccelMode ~= "Downward" and hrp and not LockedCFrame then
 			LockedCFrame = hrp.CFrame
 		end
 	else
@@ -327,8 +505,14 @@ LocalPlayer.CharacterAdded:Connect(function(char)
 end)
 
 RunService.Heartbeat:Connect(function()
+	ScanActiveCharacterTracks(CurrentGeneration)
+
 	if ActiveTrack and not ActiveTrack.IsPlaying then
-		StopEmoteBoost(ActiveTrack)
+		BeginEmoteGrace(ActiveTrack)
+	end
+
+	if EmoteActive and EmoteGraceUntil > 0 and os.clock() > EmoteGraceUntil then
+		StopEmoteBoost(nil)
 		return
 	end
 
@@ -341,14 +525,23 @@ RunService.Heartbeat:Connect(function()
 	local hum = char and char:FindFirstChildOfClass("Humanoid")
 	local camera = workspace.CurrentCamera
 	if hrp and hum then
-		if hum.MoveDirection.Magnitude > 0 then
-			LockedCFrame = hrp.CFrame
-		elseif LockedCFrame then
-			hrp.CFrame = CFrame.new(LockedCFrame.Position) * (hrp.CFrame - hrp.CFrame.Position)
+		if AccelMode ~= "Downward" then
+			if not LockedCFrame then
+				LockedCFrame = hrp.CFrame
+			end
+			if hum.MoveDirection.Magnitude > 0 then
+				LockedCFrame = hrp.CFrame
+			elseif LockedCFrame then
+				hrp.CFrame = CFrame.new(LockedCFrame.Position) * (hrp.CFrame - hrp.CFrame.Position)
+			end
 		end
 		local camLook = camera and camera.CFrame.LookVector or hrp.CFrame.LookVector
 		local flatLook = Vector3.new(camLook.X, 0, camLook.Z)
 		local frontDir = flatLook.Magnitude > 0 and flatLook.Unit or Vector3.new(hrp.CFrame.LookVector.X, 0, hrp.CFrame.LookVector.Z).Unit
-		hrp.AssemblyLinearVelocity = frontDir * ThrowMultiplier
+		if AccelMode == "Downward" then
+			hrp.AssemblyLinearVelocity = Vector3.new(0, -1, 0) * ThrowMultiplier
+		else
+			hrp.AssemblyLinearVelocity = frontDir * ThrowMultiplier
+		end
 	end
 end)
